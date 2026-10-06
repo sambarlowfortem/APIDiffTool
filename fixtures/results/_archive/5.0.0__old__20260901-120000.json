@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "version": "5.0.0",
+  "build": "old",
+  "run_id": "5.0.0__old__20260901-120000",
+  "captured_at": "2026-09-01T12:00:00Z",
+  "base_url": "https://skydome.fortem",
+  "registry": {
+    "file": "endpoints.yaml",
+    "registry_version": 1,
+    "sha256": "aabbcc0011223344"
+  },
+  "format_detectors_version": "1.0",
+  "not_found_signature": {
+    "status": 404,
+    "content_type": "application/json",
+    "body_schema": {
+      "error": {
+        "type": "string",
+        "format": "text"
+      },
+      "msg": {
+        "type": "string",
+        "format": "text"
+      }
+    }
+  },
+  "endpoints": [
+    {
+      "path": "/api/v2/zones",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "unknown",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    }
+  ]
+}

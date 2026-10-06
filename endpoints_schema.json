@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "API Diff Tool Endpoint Registry",
+  "type": "object",
+  "required": ["registry_version", "endpoints"],
+  "additionalProperties": false,
+  "properties": {
+    "registry_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Bump on every edit to the registry file."
+    },
+    "endpoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/endpoint" }
+    }
+  },
+  "definitions": {
+    "endpoint": {
+      "type": "object",
+      "required": ["path", "methods"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "Route path, optionally with {param} placeholders."
+        },
+        "methods": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+          },
+          "description": "HTTP methods listed in the docs. These get body + ablation testing."
+        },
+        "params": {
+          "type": "object",
+          "description": "Path parameter resolution. Key = param name (without braces).",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["from", "field"],
+                "additionalProperties": false,
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "pattern": "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) /.+",
+                    "description": "The method+path call whose response provides the value."
+                  },
+                  "field": {
+                    "type": "string",
+                    "description": "Response field name (top-level) that holds the ID."
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["value"],
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": "string",
+                    "description": "Literal fixed value to use for this parameter."
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "body": {
+          "type": "object",
+          "description": "Known-good request bodies keyed by method. Values are arbitrary JSON objects.",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "object" },
+              { "type": "array" }
+            ]
+          }
+        },
+        "deprecated": {
+          "type": "object",
+          "description": "Deprecation labels keyed by method or '*' for all methods.",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["in"],
+            "additionalProperties": false,
+            "properties": {
+              "in": {
+                "type": "string",
+                "description": "Version string when the docs first marked this deprecated."
+              },
+              "stopped_working_in": {
+                "type": "string",
+                "description": "First version where the endpoint no longer works."
+              }
+            }
+          }
+        },
+        "removed_from_docs": {
+          "type": "string",
+          "description": "Version string when this endpoint left the docs. Keep the entry; do not delete."
+        },
+        "skip_methods": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+          },
+          "description": "Methods the prober must NOT send to this endpoint (e.g. POST on shutdown/restart endpoints)."
+        }
+      }
+    }
+  }
+}

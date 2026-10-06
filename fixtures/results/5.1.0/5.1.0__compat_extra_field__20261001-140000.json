@@ -1,0 +1,485 @@
+{
+  "schema_version": "1.0",
+  "version": "5.1.0",
+  "build": "compat_extra_field",
+  "run_id": "5.1.0__compat_extra_field__20261001-140000",
+  "captured_at": "2026-10-01T14:00:00Z",
+  "base_url": "https://skydome.fortem",
+  "registry": {
+    "file": "endpoints.yaml",
+    "registry_version": 1,
+    "sha256": "aabbcc0011223344"
+  },
+  "format_detectors_version": "1.0",
+  "not_found_signature": {
+    "status": 404,
+    "content_type": "application/json",
+    "body_schema": {
+      "error": {
+        "type": "string",
+        "format": "text"
+      },
+      "msg": {
+        "type": "string",
+        "format": "text"
+      }
+    }
+  },
+  "endpoints": [
+    {
+      "path": "/api/v2/zones",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "unknown",
+          "required": true
+        },
+        "_id": {
+          "type": "string",
+          "format": "hex_id",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "format": "text",
+          "required": true
+        },
+        "created": {
+          "type": "string",
+          "format": "iso8601_datetime_z_ms",
+          "required": true
+        },
+        "active": {
+          "type": "boolean",
+          "format": "unknown",
+          "required": true
+        },
+        "floor": {
+          "type": "number",
+          "format": "integer",
+          "required": false
+        },
+        "ceiling": {
+          "type": "number",
+          "format": "integer",
+          "required": false
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/zones",
+      "method": "POST",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {
+        "name": {
+          "required": true,
+          "type": "string"
+        },
+        "path": {
+          "required": true,
+          "type": "array"
+        },
+        "floor": {
+          "required": false,
+          "type": "number"
+        },
+        "ceiling": {
+          "required": false,
+          "type": "number"
+        },
+        "active": {
+          "required": false,
+          "type": "boolean"
+        },
+        "kind": {
+          "required": false,
+          "type": "string"
+        }
+      },
+      "outcomes": {
+        "baseline": {
+          "status": 201
+        },
+        "missing_name": {
+          "status": 422
+        },
+        "missing_path": {
+          "status": 422
+        },
+        "missing_floor": {
+          "status": 201
+        },
+        "missing_ceiling": {
+          "status": 201
+        },
+        "missing_active": {
+          "status": 201
+        },
+        "missing_kind": {
+          "status": 201
+        }
+      },
+      "response_schema": {
+        "_id": {
+          "type": "string",
+          "format": "hex_id",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "format": "text",
+          "required": true
+        },
+        "created": {
+          "type": "string",
+          "format": "iso8601_datetime_z_ms",
+          "required": true
+        },
+        "active": {
+          "type": "boolean",
+          "format": "unknown",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/map/styles",
+      "method": "PUT",
+      "listed": false,
+      "exists": false,
+      "scenario": "containers_present",
+      "outcomes": {
+        "baseline": {
+          "status": 405
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/map/styles",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "url": {
+          "type": "string",
+          "format": "url_absolute",
+          "required": true
+        },
+        "style": {
+          "type": "string",
+          "format": "enum_upper_snake",
+          "required": false
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/map/config",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "deprecated": {
+        "in": "5.0.0"
+      },
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "url": {
+          "type": "string",
+          "format": "url_absolute",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/reports/tracks",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "id": {
+          "type": "string",
+          "format": "shape:99A",
+          "required": true
+        },
+        "start": {
+          "type": "number",
+          "format": "epoch_milliseconds",
+          "required": true
+        },
+        "end": {
+          "type": "number",
+          "format": "epoch_milliseconds",
+          "required": false
+        },
+        "threatLevel": {
+          "type": "number",
+          "format": "integer",
+          "required": true
+        },
+        "category": {
+          "type": "string",
+          "format": "enum_lower_snake",
+          "required": false
+        },
+        "first_seen": {
+          "type": "string",
+          "format": "us_date_mdy",
+          "required": false
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/rules",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "unknown",
+          "required": true
+        },
+        "_id": {
+          "type": "string",
+          "format": "hex_id",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/dronehunters",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "unknown",
+          "required": true
+        },
+        "hunter_id": {
+          "type": "string",
+          "format": "text",
+          "required": true
+        },
+        "status": {
+          "type": "string",
+          "format": "enum_upper_snake",
+          "required": true
+        },
+        "battery": {
+          "type": "number",
+          "format": "integer",
+          "required": false
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/dronehunters",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "no_containers",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "empty_array",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/dronehunters/hangars",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "unknown",
+          "required": true
+        },
+        "clientId": {
+          "type": "string",
+          "format": "text",
+          "required": true
+        },
+        "substate": {
+          "type": "string",
+          "format": "enum_upper_snake",
+          "required": true
+        },
+        "softwareVersion": {
+          "type": "string",
+          "format": "text",
+          "required": false
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/dronehunters/hangars",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "no_containers",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "empty_array",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/sensors/rfsensors",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "unknown",
+          "required": true
+        },
+        "_id": {
+          "type": "string",
+          "format": "hex_id",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "format": "text",
+          "required": true
+        },
+        "status": {
+          "type": "string",
+          "format": "enum_upper_snake",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    },
+    {
+      "path": "/api/v2/sensors/radars",
+      "method": "GET",
+      "listed": true,
+      "exists": true,
+      "scenario": "containers_present",
+      "request_fields": {},
+      "outcomes": {
+        "baseline": {
+          "status": 200
+        }
+      },
+      "response_schema": {
+        "data": {
+          "type": "array",
+          "format": "unknown",
+          "required": true
+        },
+        "_id": {
+          "type": "string",
+          "format": "hex_id",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "format": "text",
+          "required": true
+        },
+        "status": {
+          "type": "string",
+          "format": "enum_upper_snake",
+          "required": true
+        }
+      },
+      "registry_flags": []
+    }
+  ],
+  "unknown_future_field": {
+    "some_data": true,
+    "viewer_must_ignore": true
+  }
+}

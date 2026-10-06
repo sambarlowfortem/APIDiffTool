@@ -1,0 +1,1387 @@
+registry_version: 2
+
+# Hand-checked against SkyDome_Smart_API_5.2.3.html
+# Five spot-checked endpoints at the end of this file.
+#
+# Param resolution conventions:
+#   id (zones)        → from POST /api/v2/zones, field _id
+#   id (rules)        → from POST /api/v2/rules, field _id
+#   id (radar)        → from POST /api/v2/sensors/radars, field _id
+#   id (rfsensor)     → from POST /api/v2/sensors/rfsensors, field _id
+#   id (camera)       → from POST /api/v2/sensors/cameras, field _id
+#   id (user)         → from POST /api/v2/system/users, field _id
+#   id (notification) → from GET /api/v2/system/notifications, field _id
+#   id (dropped-loc)  → from POST /api/v2/dropped-locations, field _id
+#   id (dashboard)    → from GET /api/v2/reports/dashboard, field _id
+#   id (track report) → from GET /api/v2/reports/tracks, field id
+#   id (track)        → from GET /api/v2/tracks, field id
+#   id (dronehunter)  → from GET /api/v2/dronehunters, field hunter_id
+#   hangarId          → from GET /api/v2/dronehunters/hangars, field clientId
+#   hunterId          → from GET /api/v2/dronehunters, field hunter_id
+#   name (geocage)    → from POST /api/v2/dronehunters/geocages, field name
+#   name (land-zone)  → from POST /api/v2/dronehunters/land-zones, field name
+#   name (drop-zone)  → from POST /api/v2/dronehunters/drop-zones, field name
+#   name (defend-pt)  → from POST /api/v2/dronehunters/defend-points, field name
+#   backup            → from GET /api/v2/app/backups, field name
+#   host/port (radar) → from POST /api/v2/sensors/radars, fields host / port
+#   host/port (DH)    → from GET /api/v2/dronehunters, fields host / port
+
+endpoints:
+
+  # ─── Application ────────────────────────────────────────────────────────────
+
+  - path: /api/v2/system/settings/service/{service}
+    methods: [GET]
+    params:
+      service: { value: "skydome" }
+
+  - path: /api/v2/system/settings/view/{view}
+    methods: [GET]
+    params:
+      view: { value: "main" }
+
+  - path: /api/v2/system/settings/serviceview/{service}/{view}
+    methods: [GET]
+    params:
+      service: { value: "skydome" }
+      view: { value: "main" }
+
+  - path: /api/v2/system/settings/keys
+    methods: [GET]
+
+  - path: /api/v2/system/settings/reset
+    methods: [GET]
+
+  - path: /api/v2/system/settings
+    methods: [PUT]
+    body:
+      PUT: { "filterInAirStationary": false }
+
+  # ─── Customer ────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/system/customer
+    methods: [GET, PUT]
+    body:
+      PUT: { "name": "probe-customer", "timeZone": "America/Denver" }
+
+  - path: /api/v2/system/customer/distance-marker
+    methods: [PUT]
+    body:
+      PUT: { "distanceMarker": [100] }
+
+  - path: /api/v2/system/licensekey
+    methods: [PUT]
+    body:
+      PUT: { "key": "probe-license-key-placeholder" }
+
+  # ─── Dashboard ───────────────────────────────────────────────────────────────
+
+  - path: /api/v2/reports/dashboard
+    methods: [GET]
+
+  - path: /api/v2/reports/dashboard/interval
+    methods: [GET]
+
+  - path: /api/v2/reports/dashboard/{id}
+    methods: [DELETE]
+    params:
+      id: { from: "GET /api/v2/reports/dashboard", field: "_id" }
+
+  # ─── Dropped Locations ───────────────────────────────────────────────────────
+
+  - path: /api/v2/dropped-locations
+    methods: [GET, POST]
+    body:
+      POST: { "name": "probe-drop", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+
+  - path: /api/v2/dropped-locations/{id}
+    methods: [PUT, DELETE]
+    params:
+      id: { from: "POST /api/v2/dropped-locations", field: "_id" }
+    body:
+      PUT: { "name": "probe-drop-updated", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+
+  # ─── Map ────────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/map/config
+    methods: [GET]
+    deprecated:
+      GET: { in: "5.0.0" }
+
+  - path: /api/v2/map/styles
+    methods: [GET]
+
+  - path: /api/v2/map/system-center
+    methods: [GET]
+
+  # ─── Notifications ──────────────────────────────────────────────────────────
+
+  - path: /api/v2/system/notifications
+    methods: [GET, POST]
+    body:
+      POST:
+        type: 3
+        level: 4
+        source: "probe"
+        hud: []
+        title: "probe-notification"
+        detail: "Created by API prober"
+        flagged: false
+        ackAllowed: true
+
+  - path: /api/v2/system/notifications/latest
+    methods: [GET]
+
+  - path: /api/v2/system/notifications/audit
+    methods: [GET]
+
+  - path: /api/v2/system/notifications/{id}
+    methods: [GET, PUT, DELETE]
+    params:
+      id: { from: "POST /api/v2/system/notifications", field: "_id" }
+    body:
+      PUT:
+        type: 3
+        level: 4
+        source: "probe"
+        hud: []
+        title: "probe-notification-updated"
+        detail: "Updated by API prober"
+        flagged: false
+        ackAllowed: true
+
+  - path: /api/v2/system/notifications/acknowledge/{id}
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/system/notifications", field: "_id" }
+
+  # ─── Rules ──────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/rules
+    methods: [GET, POST]
+    body:
+      POST:
+        name: "probe-rule"
+        active: true
+        condition: "agl > 5"
+        saveTrack: false
+        cancelRepeatingActions: false
+        multiActionTypes: ["ChangeThreat"]
+        threatLevel: -1
+        repeatRuleCheck: 0
+        tags: []
+        zoneTrigger: { action: "entry", name: "Close", actionThreatLevel: 0 }
+        email: { cc: "", showInConsole: false, subject: "", text: "", to: "" }
+        sms: { carrier: null, showInConsole: false, text: "", to: "" }
+        notification: { detail: "", level: "error", message: "", type: "alert" }
+        changeThreat: { threat: 5 }
+        rangeAlarm: { range: "close" }
+        groundControl: { command: "capture", confirm: 0, confirmTimeoutAction: "execute" }
+        api:
+          cadence: 0
+          customHeaders: ""
+          expectJSON: false
+          host: ""
+          method: "GET"
+          password: ""
+          path: ""
+          port: null
+          protocol: "http"
+          repeatMode: "none"
+          username: ""
+          fields:
+            focus: { agl: false, aglChange: false, detects: false, distance: false, duration: false, maxAgl: false, maxRcs: false, minAgl: false, minRcs: false, rcs: false, speed: false }
+            point: { agl: false, ecef: false, globalTime: false, heading: false, lla: false, rcs: false, speed: false, ts: false, velocityNED: false }
+            track: { actions: false, agl: false, aglChange: false, category: false, closingAngle: false, closingDistance: false, closingSpeed: false, detects: false, distance: false, duration: false, heading: false, hour: false, id: false, lastZone: false, maxAgl: false, maxRcs: false, minAgl: false, minRcs: false, origin: false, rcs: false, speed: false, tags: false, threatLevel: false, trigger: false, weekday: false, zone: false, zoneHits: false, zones: false }
+          response: { cancel: false, note: false, tags: false, threatLevel: false }
+
+  - path: /api/v2/rules/conditions
+    methods: [GET]
+
+  - path: /api/v2/rules/test
+    methods: [POST]
+    body:
+      POST:
+        name: "probe-rule-test"
+        active: true
+        condition: "agl > 5"
+        saveTrack: false
+        cancelRepeatingActions: false
+        multiActionTypes: []
+        threatLevel: -1
+        repeatRuleCheck: 0
+        tags: []
+
+  - path: /api/v2/rules/validate-condition
+    methods: [POST]
+    body:
+      POST: { "condition": "agl > 5" }
+
+  - path: /api/v2/rules/{id}
+    methods: [PUT, DELETE]
+    params:
+      id: { from: "POST /api/v2/rules", field: "_id" }
+    body:
+      PUT:
+        name: "probe-rule-updated"
+        active: true
+        condition: "agl > 10"
+        saveTrack: false
+        cancelRepeatingActions: false
+        multiActionTypes: []
+        threatLevel: -1
+        repeatRuleCheck: 0
+        tags: []
+
+  # ─── Site ───────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/service/restart
+    methods: [POST]
+    skip_methods: [POST, PUT, PATCH, DELETE]  # executes a real system restart
+
+  - path: /api/v2/service/shutdown
+    methods: [POST]
+    skip_methods: [POST, PUT, PATCH, DELETE]  # executes a real system shutdown
+
+  - path: /api/v2/app/state
+    methods: [GET]
+
+  - path: /api/v2/app/gps
+    methods: [GET]
+
+  - path: /api/v2/app/backups
+    methods: [GET]
+
+  - path: /api/v2/app/backups/{backup}
+    methods: [GET]
+    params:
+      backup: { from: "GET /api/v2/app/backups", field: "name" }
+
+  - path: /api/v2/service/network
+    methods: [GET, POST]
+    body:
+      POST:
+        mqttHost: "172.16.0.250"
+        mqttPort: 1883
+        mapsHost: "172.16.0.250"
+        mapsPort: 8089
+        skydomeHost: "172.16.0.250"
+        skydomePort: 80
+        interface: ["enp0s1"]
+        ips: ["dhcp"]
+        nameservers: [["8.8.8.8"]]
+        gateway: "172.16.0.1"
+        dhcp: true
+
+  # ─── Time Servers ────────────────────────────────────────────────────────────
+
+  - path: /api/v2/system/time-servers
+    methods: [GET]
+
+  - path: /api/v2/system/time-servers/sync
+    methods: [GET]
+
+  # ─── Users ──────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/system/users
+    methods: [GET, POST]
+    body:
+      POST:
+        active: true
+        email: "probe-user@fortemtech.com"
+        emailReset: false
+        fname: "Probe"
+        lname: "User"
+        role: "user"
+        prefs:
+          language: "en"
+          maps:
+            easeToCenter: true
+            defaultMap: { bearing: 0, lat: 40.35062, lng: -111.760567, pitch: 1, zoom: 14 }
+
+  - path: /api/v2/system/users/logout
+    methods: [POST]
+
+  - path: /api/v2/system/users/check-access
+    methods: [GET]
+
+  - path: /api/v2/system/users/login
+    methods: [POST]
+    body:
+      POST: { "email": "tech@fortemtech.com", "password": "Dr0nehunter!" }
+
+  - path: /api/v2/system/users/token/refresh
+    methods: [GET]
+
+  - path: /api/v2/system/users/eula
+    methods: [PUT]
+
+  - path: /api/v2/system/users/preferences
+    methods: [GET, POST]
+    body:
+      POST:
+        language: "en"
+        maps:
+          easeToCenter: true
+          defaultMap: { bearing: 0, lat: 40.35062, lng: -111.760567, pitch: 1, zoom: 14 }
+
+  - path: /api/v2/system/users/{id}
+    methods: [PUT, DELETE]
+    params:
+      id: { from: "POST /api/v2/system/users", field: "_id" }
+    body:
+      PUT:
+        active: true
+        email: "probe-user-updated@fortemtech.com"
+        fname: "ProbeUpdated"
+        lname: "User"
+
+  - path: /api/v2/system/users/update-sms/{id}
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/system/users", field: "_id" }
+    body:
+      PUT: { "smsNumber": "", "smsCarrier": null }
+
+  - path: /api/v2/system/users/{id}/password
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/system/users", field: "_id" }
+    body:
+      PUT: { "password": "Probe123!" }
+
+  - path: /api/v2/system/users/{id}/reset-password
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/system/users", field: "_id" }
+
+  - path: /api/v2/system/users/{id}/confirm-sms-code
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/system/users", field: "_id" }
+    body:
+      PUT: { "code": 0 }
+
+  - path: /api/v2/system/users/{id}/generate-sms-code
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/system/users", field: "_id" }
+    body:
+      PUT: { "smsNumber": "1 (555) 555-5555", "smsCarrier": { "name": "Verizon Wireless", "domain": "vtext.com" } }
+
+  - path: /api/v2/system/users/roles
+    methods: [GET]
+
+  - path: /api/v2/system/users/admin/setup
+    methods: [PUT]
+    body:
+      PUT: { "user": {}, "newPass": "probe-placeholder" }
+
+  - path: /api/v2/system/user
+    methods: [GET]
+
+  # ─── Zones ──────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/zones
+    methods: [GET, POST]
+    body:
+      POST:
+        name: "probe-zone"
+        path:
+          - [40.346, -111.797]
+          - [40.346, -111.798]
+          - [40.345, -111.798]
+          - [40.345, -111.797]
+          - [40.346, -111.797]
+        floor: 10
+        ceiling: 200
+        kind: "regular"
+        active: true
+        notes: ""
+        styles:
+          borderDash: "solid"
+          borderWidth: 2
+          fillColor: "#21E604"
+          fillOpacity: 0.1
+          labelBackgroundColor: "#000000"
+          labelBackgroundOpacity: 0.5
+          labelFontColor: "#FFFFFF"
+          labelFontSize: "small"
+
+  - path: /api/v2/zones/{id}
+    methods: [PUT, DELETE]
+    params:
+      id: { from: "POST /api/v2/zones", field: "_id" }
+    body:
+      PUT:
+        name: "probe-zone-updated"
+        path:
+          - [40.346, -111.797]
+          - [40.346, -111.798]
+          - [40.345, -111.798]
+          - [40.345, -111.797]
+          - [40.346, -111.797]
+        floor: 10
+        ceiling: 200
+        kind: "regular"
+        active: true
+        notes: ""
+
+  # ─── Reports - Tracks ───────────────────────────────────────────────────────
+
+  - path: /api/v2/reports/tracks/categories
+    methods: [GET]
+
+  - path: /api/v2/reports/tracks
+    methods: [GET]
+
+  - path: /api/v2/reports/tracks/{id}/prepare-recordings
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/reports/tracks", field: "id" }
+    body:
+      POST: { "stream_type": "optical" }
+
+  - path: /api/v2/reports/tracks/delete-multiple
+    methods: [DELETE]
+
+  - path: /api/v2/reports/tracks/{id}
+    methods: [GET, PUT, DELETE]
+    params:
+      id: { from: "GET /api/v2/reports/tracks", field: "id" }
+    body:
+      PUT:
+        id: "probe-track"
+        start: 1613093218032
+        end: 1613093237791
+        tags: []
+        threatLevel: 0
+        displayCategory: true
+
+  # ─── Reports - Logs ─────────────────────────────────────────────────────────
+
+  - path: /api/v2/reports/logs/download
+    methods: [GET]
+
+  - path: /api/v2/reports/logs/create-bug-log
+    methods: [GET]
+
+  # ─── DroneHangar ─────────────────────────────────────────────────────────────
+
+  - path: /api/v2/dronehunters/hangars
+    methods: [GET]
+
+  - path: /api/v2/dronehunters/hangars/set-lla/{hangarId}
+    methods: [PUT]
+    params:
+      hangarId: { from: "GET /api/v2/dronehunters/hangars", field: "clientId" }
+    body:
+      PUT: { "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+
+  - path: /api/v2/dronehunters/hangars/{hangarId}/{action}
+    methods: [PUT]
+    params:
+      hangarId: { from: "GET /api/v2/dronehunters/hangars", field: "clientId" }
+      action: { value: "open" }
+
+  - path: /api/v2/dronehunters/hangars/{hangarId}/hunter/{hunterId}
+    methods: [PUT]
+    params:
+      hangarId: { from: "GET /api/v2/dronehunters/hangars", field: "clientId" }
+      hunterId: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  # ─── DroneHunter ─────────────────────────────────────────────────────────────
+
+  - path: /api/v2/dronehunters
+    methods: [GET]
+
+  - path: /api/v2/dronehunters/{host}/{port}/hunters
+    methods: [GET]
+    params:
+      host: { from: "GET /api/v2/dronehunters", field: "host" }
+      port: { from: "GET /api/v2/dronehunters", field: "port" }
+
+  - path: /api/v2/dronehunters/{id}/defend
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "lat": 40.348, "lon": -111.758, "alt": 1450.0, "azm": 0 }
+
+  - path: /api/v2/dronehunters/{id}/defend-track
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/land
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "immediately": false }
+
+  - path: /api/v2/dronehunters/{id}/navigate
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "search": false, "lat": 40.348, "lon": -111.781, "alt": 1451.36 }
+
+  - path: /api/v2/dronehunters/{id}/stop
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/return-home
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/send-on-mission
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "points": [[40.348, -111.758, 1450]], "kill": false, "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/send-on-hunt
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "kill": false, "lat": 40.348, "lon": -111.758, "alt": 1450.0 }
+
+  - path: /api/v2/dronehunters/{id}/set-payload-config
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST:
+        - name: "rightWeapon"
+          payload_type: "RANGED"
+          payload_class: "standardNetGun"
+          payload_function: "ATTACK"
+          tier: 2
+          cartridges_remaining: 1
+          max_cartridges: 1
+
+  - path: /api/v2/dronehunters/{id}/set-landing-pad-orientation
+    methods: [PUT]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      PUT: { "roll": 0, "pitch": 0, "yaw": 0 }
+
+  - path: /api/v2/dronehunters/{id}/set-height-bounds
+    methods: [PUT]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      PUT: { "floor": 1350, "ceiling": 2500 }
+
+  - path: /api/v2/dronehunters/{id}/comm-loss-failsafe
+    methods: [PUT]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      PUT: { "mode": "return_home" }
+
+  - path: /api/v2/dronehunters/{id}/calibrate
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "command": "start" }
+
+  - path: /api/v2/dronehunters/{id}/cancel-calibrate
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "command": "cancel" }
+
+  - path: /api/v2/dronehunters/{id}/get-component-data
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/file-update
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/cancel-update
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{hunterId}/status
+    methods: [POST]
+    params:
+      hunterId: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "status": "probe" }
+
+  - path: /api/v2/dronehunters/tracks/{trackId}/confirm-dispatch
+    methods: [POST]
+    params:
+      trackId: { from: "GET /api/v2/tracks", field: "id" }
+    body:
+      POST: { "confirm": true }
+
+  - path: /api/v2/dronehunters/tracks/{trackId}/manual-hunt
+    methods: [POST]
+    params:
+      trackId: { from: "GET /api/v2/tracks", field: "id" }
+    body:
+      POST: { "status": "hunt" }
+
+  - path: /api/v2/dronehunters/{id}/toggle-accessory/{accessory}/{toggle}
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+      accessory: { value: "light" }
+      toggle: { value: "on" }
+
+  - path: /api/v2/dronehunters/{id}/override-low-battery-rtl
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/set-time-slot
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "timeslot": 1 }
+
+  - path: /api/v2/dronehunters/{id}/retrieve-flight-log
+    methods: [GET]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/set-alt-offset
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "clear": false, "alt": 0 }
+
+  - path: /api/v2/dronehunters/{id}/pair
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/unpair
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/set-config
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "file": "probe", "param": "probe", "value": "probe" }
+
+  - path: /api/v2/dronehunters/{id}/set-require-radar-gps
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "value": false }
+
+  - path: /api/v2/dronehunters/total-dh-streams
+    methods: [GET]
+
+  - path: /api/v2/dronehunters/{id}/start-stream
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/stop-stream
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/hunt
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "kill": false, "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/add-to-pool
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/remove-from-pool
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/gnss
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "enable": true }
+
+  # ─── DroneHunter - Defend Points ────────────────────────────────────────────
+
+  - path: /api/v2/dronehunters/defend-points
+    methods: [GET, POST]
+    body:
+      POST: { "name": "probe-defend-point", "lat": 40.348, "lon": -111.758, "radius": 100 }
+
+  - path: /api/v2/dronehunters/defend-points/{name}
+    methods: [DELETE]
+    params:
+      name: { from: "POST /api/v2/dronehunters/defend-points", field: "name" }
+
+  # ─── DroneHunter - Land Zones ───────────────────────────────────────────────
+
+  - path: /api/v2/dronehunters/land-zones
+    methods: [GET, POST]
+    body:
+      POST: { "name": "probe-land-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+
+  - path: /api/v2/dronehunters/land-zones/{name}
+    methods: [PUT, DELETE]
+    params:
+      name: { from: "POST /api/v2/dronehunters/land-zones", field: "name" }
+    body:
+      PUT: { "lat": 40.349, "lon": -111.759, "alt": 1351.0 }
+
+  - path: /api/v2/dronehunters/{id}/land-zones/assign
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "name": "probe-land-zone" }
+
+  - path: /api/v2/dronehunters/{id}/land-zones/unassign
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/land-zones/override-alt
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "alt": 1350.0 }
+
+  # ─── DroneHunter - Drop Zones ───────────────────────────────────────────────
+
+  - path: /api/v2/dronehunters/drop-zones
+    methods: [GET, POST]
+    body:
+      POST: { "name": "probe-drop-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+
+  - path: /api/v2/dronehunters/drop-zones/{name}
+    methods: [PUT, DELETE]
+    params:
+      name: { from: "POST /api/v2/dronehunters/drop-zones", field: "name" }
+    body:
+      PUT: { "lat": 40.349, "lon": -111.759, "alt": 1351.0 }
+
+  - path: /api/v2/dronehunters/{id}/drop-zones/assign
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "name": "probe-drop-zone" }
+
+  - path: /api/v2/dronehunters/{id}/drop-zones/unassign
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/drop-zones/override-alt
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "alt": 1350.0 }
+
+  # ─── DroneHunter - Ground Control ───────────────────────────────────────────
+
+  - path: /api/v2/dronehunters/groundcontrol
+    methods: [GET, PUT]
+    body:
+      PUT:
+        gc_desc: "probe-ground-control"
+        hostName: "ground-control"
+        port: 8083
+        gc_loc: "DGC1"
+        max_drop_zone_distance: 100
+        max_land_zone_distance: 100
+        default_floor: 1380
+        default_ceiling: 2500
+
+  - path: /api/v2/dronehunters/groundcontrol/{host}/{port}
+    methods: [GET]
+    params:
+      host: { value: "ground-control" }
+      port: { value: "8083" }
+
+  - path: /api/v2/dronehunters/groundcontrol/radio
+    methods: [POST]
+    body:
+      POST: { "address": "probe-address", "config": "probe-config", "value": "probe-value" }
+
+  - path: /api/v2/dronehunters/groundcontrol/set-registered-radio
+    methods: [POST]
+    body:
+      POST: { "model": "probe-model", "address": "probe-address" }
+
+  - path: /api/v2/dronehunters/groundcontrol/radio-frequency-settings
+    methods: [GET, POST]
+    body:
+      POST: { "settings": {} }
+
+  - path: /api/v2/dronehunters/get-global-rules-of-engagement
+    methods: [GET]
+
+  - path: /api/v2/dronehunters/set-global-rules-of-engagement
+    methods: [POST]
+    body:
+      POST: { "acquire_targets": true, "default_mission": "defend", "weapons_enabled": false }
+
+  - path: /api/v2/dronehunters/remove-tracks-from-pool
+    methods: [POST]
+    body:
+      POST: { "track_ids": [] }
+
+  - path: /api/v2/dronehunters/update-swarm-mitigation-assignments
+    methods: [POST]
+    body:
+      POST: { "hunter_ids": [], "target_ids": [], "target_locations": [], "mission_type": "defend" }
+
+  - path: /api/v2/dronehunters/toggle_target_assignment
+    methods: [POST]
+    body:
+      POST: { "value": false }
+
+  # ─── DroneHunter - Default Height Bounds ────────────────────────────────────
+
+  - path: /api/v2/dronehunters/default-height-bounds
+    methods: [GET, PUT]
+    body:
+      PUT: { "floor": 1350, "ceiling": 2500 }
+
+  # ─── DroneHunter - Geocages ──────────────────────────────────────────────────
+
+  - path: /api/v2/dronehunters/geocages
+    methods: [GET, POST]
+    body:
+      POST:
+        name: "probe-geocage"
+        cage_type: "KEEP_HUNTER_OUT"
+        ceiling: 2000
+        floor: 0
+        lat_lon_points: "[[40.349560,-111.757038],[40.347985,-111.757082],[40.347990,-111.756147],[40.349602,-111.756164]]"
+        mobile: false
+        response_type: "STOP"
+
+  - path: /api/v2/dronehunters/geocages/{name}
+    methods: [PUT, DELETE]
+    params:
+      name: { from: "POST /api/v2/dronehunters/geocages", field: "name" }
+    body:
+      PUT:
+        cage_type: "KEEP_HUNTER_OUT"
+        ceiling: 2000
+        floor: 0
+        lat_lon_points: "[[40.349560,-111.757038],[40.347985,-111.757082],[40.347990,-111.756147],[40.349602,-111.756164]]"
+        mobile: false
+        response_type: "STOP"
+
+  # ─── DroneHunter - Waypoints ─────────────────────────────────────────────────
+
+  - path: /api/v2/dronehunters/{id}/waypoints/hover
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "waypoints": [[40.348, -111.758, 1450], [40.349, -111.759, 1460]] }
+
+  - path: /api/v2/dronehunters/{id}/waypoints/attack-track
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "waypoints": [[40.348, -111.758, 1450]], "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/waypoints/attack-position
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "waypoints": [[40.348, -111.758, 1450]], "position": [40.348, -111.758, 1450] }
+
+  - path: /api/v2/dronehunters/{id}/waypoints/defend-track
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "waypoints": [[40.348, -111.758, 1450]], "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/waypoints/defend-direction
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "waypoints": [[40.348, -111.758, 1450]], "azm": 90 }
+
+  - path: /api/v2/dronehunters/{id}/waypoints/capture-track
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "waypoints": [[40.348, -111.758, 1450]], "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/waypoints/capture-position
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "waypoints": [[40.348, -111.758, 1450]], "position": [40.348, -111.758, 1450] }
+
+  # ─── Cameras ─────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/sensors/cameras
+    methods: [GET, POST]
+    body:
+      POST:
+        name: "probe-camera"
+        controllerHostname: "10.100.16.5"
+        latitude: 40.348
+        longitude: -111.758
+        altitude: 1350.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+  - path: /api/v2/sensors/cameras/{id}
+    methods: [GET, PUT, DELETE]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+    body:
+      PUT:
+        name: "probe-camera-updated"
+        controllerHostname: "10.100.16.5"
+        latitude: 40.348
+        longitude: -111.758
+        altitude: 1350.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+  - path: /api/v2/sensors/cameras/follow
+    methods: [POST]
+    body:
+      POST: { "trackType": "radar", "trackId": "probe-track-id" }
+
+  - path: /api/v2/sensors/cameras/go-to-lla
+    methods: [POST]
+    body:
+      POST: { "latitude": 40.348, "longitude": -111.758, "altitude": 1350.0 }
+
+  - path: /api/v2/sensors/cameras/stop-follow
+    methods: [POST]
+
+  - path: /api/v2/sensors/cameras/{id}/follow
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+    body:
+      POST: { "trackId": "probe-track-id" }
+
+  - path: /api/v2/sensors/cameras/{id}/go-to-home
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/go-to-lla
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+    body:
+      POST: { "latitude": 40.348, "longitude": -111.758, "altitude": 1350.0 }
+
+  - path: /api/v2/sensors/cameras/{id}/pixel-move
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/move-camera
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+    body:
+      POST: { "ptzVector": [0, 0, 0] }
+
+  - path: /api/v2/sensors/cameras/{id}/nudge-ptz
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+    body:
+      POST: { "ptzNudge": [0, 0, 0] }
+
+  - path: /api/v2/sensors/cameras/{id}/reset-ptz-nudge
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/set-home
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/stop-follow
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/thermal-focus
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+    body:
+      POST: { "focus": 0 }
+
+  - path: /api/v2/sensors/cameras/{id}/wiper-off
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/wiper-on
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/change-optical-track
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/clear-optical-track
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/start-optical-calibration
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+    body:
+      POST: { "radarLLA": [40.348, -111.758, 1350.0], "radarRPY": [0, 0, 90] }
+
+  - path: /api/v2/sensors/cameras/{id}/optical-calibration-status
+    methods: [GET]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/confirm-radar-optical-calibration
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/deny-radar-optical-calibration
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  - path: /api/v2/sensors/cameras/{id}/stop-optical-calibration
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+
+  # ─── DataStream ──────────────────────────────────────────────────────────────
+
+  - path: /datastream/config
+    methods: [GET, POST, PUT, DELETE]
+    body:
+      POST:
+        host: "172.16.0.45:3151"
+        username: "probe"
+        password: "probe"
+        apiKey: ""
+        fields: ["lla"]
+        method: "http"
+        type: "dataStreamConfig"
+        enabled: false
+        trackFormat: "json"
+        associateInput: false
+        asterixSystemAreaCode: 0
+        asterixSystemIdentificationCode: 0
+      PUT:
+        - host: "172.16.0.45:3151"
+          username: "probe"
+          password: "probe"
+          apiKey: ""
+          fields: ["lla"]
+          method: "http"
+          type: "dataStreamConfig"
+          enabled: false
+          trackFormat: "json"
+          associateInput: false
+          asterixSystemAreaCode: 0
+          asterixSystemIdentificationCode: 0
+
+  # ─── Radars ──────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/sensors/radars
+    methods: [GET, POST]
+    body:
+      POST:
+        id: "X00330136"
+        mobile: false
+        calibrated: false
+        transmit: true
+        host: "172.16.0.47"
+        port: 9991
+        configPort: 9990
+        model: "R40"
+        name: "Radar X00330136"
+        notes: ""
+        useTrackElevationFilter: false
+        username: "TEST"
+        password: "MEGgrq5iT21P2R2g"
+
+  - path: /api/v2/sensors/radars/{host}/{port}/test
+    methods: [GET]
+    params:
+      host: { from: "POST /api/v2/sensors/radars", field: "host" }
+      port: { from: "POST /api/v2/sensors/radars", field: "port" }
+
+  - path: /api/v2/sensors/radars/{host}/{port}/health-check
+    methods: [GET]
+    params:
+      host: { from: "POST /api/v2/sensors/radars", field: "host" }
+      port: { from: "POST /api/v2/sensors/radars", field: "port" }
+
+  - path: /api/v2/sensors/radars/{host}/{port}/config
+    methods: [GET]
+    params:
+      host: { from: "POST /api/v2/sensors/radars", field: "host" }
+      port: { from: "POST /api/v2/sensors/radars", field: "port" }
+
+  - path: /api/v2/sensors/radars/{id}/refresh-connection
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/radars", field: "_id" }
+
+  - path: /api/v2/sensors/radars/{id}/move
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/sensors/radars", field: "_id" }
+    body:
+      PUT: { "lat": 40.348, "lon": -111.758, "alt": 1350.0, "yaw": 90 }
+
+  - path: /api/v2/sensors/radars/start-sys-pos
+    methods: [POST]
+
+  - path: /api/v2/sensors/radars/start-calibration
+    methods: [POST]
+
+  - path: /api/v2/sensors/radars/stop-calibration
+    methods: [POST]
+
+  - path: /api/v2/sensors/radars/{id}/mode
+    methods: [POST]
+    params:
+      id: { from: "POST /api/v2/sensors/radars", field: "_id" }
+    body:
+      POST:
+        id: "X00330136"
+        transmit: true
+        host: "172.16.0.47"
+        port: 9991
+        configPort: 9990
+        model: "R40"
+        name: "Radar X00330136"
+
+  - path: /api/v2/sensors/radars/bulk-edit
+    methods: [PUT]
+    body:
+      PUT:
+        ids: []
+        transmit: true
+        elevationFilters:
+          useTrackElevationFilter: false
+          minTrackAglMeters: 0
+          maxTrackAglMeters: 0
+
+  - path: /api/v2/sensors/radars/{id}
+    methods: [PUT, DELETE]
+    params:
+      id: { from: "POST /api/v2/sensors/radars", field: "_id" }
+    body:
+      PUT:
+        id: "X00330136"
+        mobile: false
+        calibrated: false
+        transmit: true
+        host: "172.16.0.47"
+        port: 9991
+        configPort: 9990
+        model: "R40"
+        name: "Radar X00330136 Updated"
+        useTrackElevationFilter: false
+        username: "TEST"
+        password: "MEGgrq5iT21P2R2g"
+
+  - path: /api/v2/sensors/radars/delete-multiple
+    methods: [DELETE]
+
+  # ─── Tracks ──────────────────────────────────────────────────────────────────
+
+  - path: /api/v2/tracks
+    methods: [GET, POST]
+    body:
+      POST: { "sensorId": "probe-sensor", "points": [{}] }
+
+  - path: /api/v2/tracks/paths
+    methods: [GET]
+
+  - path: /api/v2/tracks/current
+    methods: [GET, PUT]
+    body:
+      PUT: { "id": "probe-track-id" }
+
+  - path: /api/v2/tracks/{id}
+    methods: [GET]
+    params:
+      id: { from: "GET /api/v2/tracks", field: "id" }
+
+  - path: /api/v2/tracks/paths/{id}
+    methods: [GET]
+    params:
+      id: { from: "GET /api/v2/tracks", field: "id" }
+
+  - path: /api/v2/tracks/cot
+    methods: [POST]
+    body:
+      POST: { "xml": "<event/>" }
+
+  - path: /api/v2/tracks/{id}/ignore
+    methods: [PUT]
+    params:
+      id: { from: "GET /api/v2/tracks", field: "id" }
+
+  - path: /api/v2/tracks/queue
+    methods: [POST]
+    body:
+      POST: { "type": "radar", "points": [{}] }
+
+  - path: /api/v2/tracks/{id}/custom-rf-track-action
+    methods: [GET]
+    params:
+      id: { from: "GET /api/v2/tracks", field: "id" }
+
+  - path: /api/v2/tracks/rf-track/{id}/mitigate
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/tracks", field: "id" }
+    body:
+      POST: { "type": "probe", "coords": [] }
+
+  - path: /api/v2/tracks/{id}/set-manual-threat
+    methods: [PUT]
+    params:
+      id: { from: "GET /api/v2/tracks", field: "id" }
+    body:
+      PUT: { "threatLevel": 0 }
+
+  - path: /api/v2/tracks/{id}/object-of-interest
+    methods: [PUT]
+    params:
+      id: { from: "GET /api/v2/tracks", field: "id" }
+
+  # ─── RF Sensors ──────────────────────────────────────────────────────────────
+
+  - path: /api/v2/sensors/rfsensors
+    methods: [GET, POST]
+    body:
+      POST:
+        model: "WhiteFox"
+        name: "probe-rfsensor"
+        host: "192.168.1.100"
+        username: "probe"
+        password: "probe"
+
+  - path: /api/v2/sensors/rfsensors/{id}
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/sensors/rfsensors", field: "_id" }
+    body:
+      PUT:
+        model: "WhiteFox"
+        name: "probe-rfsensor-updated"
+        host: "192.168.1.100"
+        username: "probe"
+        password: "probe"
+
+  - path: /api/v2/sensors/rfsensors/jam
+    methods: [POST]
+    body:
+      POST: { "jammingState": [] }
+
+  - path: /api/v2/sensors/rfsensors/{id}/turn-jammer
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/sensors/rfsensors", field: "_id" }
+    body:
+      PUT: { "pan": 0, "deviceId": "probe-device" }
+
+  - path: /api/v2/sensors/rfsensors/directional-jammers
+    methods: [GET]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HAND-CHECK NOTES (5 endpoints verified against SkyDome_Smart_API_5.2.3.html)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 1. GET /api/v2/system/customer
+#    HTML section-id: tag/Customer/paths/~1api~1v2~1system~1customer/get ✓
+#    Method/path extracted correctly. No body needed.
+#
+# 2. POST /api/v2/rules
+#    HTML section-id: tag/Rules/paths/~1api~1v2~1rules/post ✓
+#    Body example from API docs and sdv5_Rule_createRule.py match.
+#    Long body; key fields: name, active, condition required.
+#
+# 3. POST /api/v2/sensors/radars
+#    HTML section-id: tag/Radars/paths/~1api~1v2~1sensors~1radars/post ✓
+#    Body simplified from sdv5_Radar_addRadar.py (70 fields → 12 key fields).
+#    Full body in the example script is mostly config/position data; ablation
+#    will discover which fields are truly required by the API.
+#
+# 4. GET /api/v2/dronehunters/{host}/{port}/hunters
+#    HTML section-id: tag/DroneHunter/paths/~1api~1v2~1dronehunters~1{host}~1{port}~1hunters/get ✓
+#    Path params: host and port from dronehunters list.
+#    UNCLEAR: API docs do not clarify the exact field names in GET /dronehunters
+#    response that contain the host and port. Using "host" and "port" as best
+#    guesses from the Radar add script pattern. Team should verify field names.
+#
+# 5. DELETE /api/v2/reports/tracks/delete-multiple
+#    HTML section-id: tag/Reports-Tracks/paths/~1api~1v2~1reports~1tracks~1delete-multiple/delete ✓
+#    No body found in the docs for this endpoint. May require a body with IDs.
+#    UNCLEAR: request body not shown in docs. Team should fill in if known.
+#
+# Gaps identified (no body example in docs or scripts):
+#   - PUT /api/v2/dronehunters/hangars/{hangarId}/{action}: no body in docs;
+#     action enum values not documented (using "open" as placeholder).
+#   - PUT /api/v2/dronehunters/hangars/{hangarId}/hunter/{hunterId}: no body.
+#   - POST /api/v2/dronehunters/{id}/get-component-data: no body in docs.
+#   - POST /api/v2/dronehunters/{id}/file-update: no body in docs.
+#   - POST /api/v2/dronehunters/{id}/cancel-update: no body in docs.
+#   - DELETE /api/v2/sensors/radars/delete-multiple: no body in docs.
+#   - DELETE /api/v2/reports/tracks/delete-multiple: no body in docs.
+#   - GET /api/v2/system/users/check-access: query params not shown.
+#   - Various camera action endpoints (pixel-move, reset-ptz-nudge, etc.): minimal/no bodies.

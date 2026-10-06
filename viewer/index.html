@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Diff Viewer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#2a2f45;
+  --border:#353a52;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --accent:#6366f1;--accent2:#818cf8;
+  --green:#22c55e;--red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6;--orange:#f97316;--purple:#a855f7;
+  --green-bg:rgba(34,197,94,.12);--red-bg:rgba(239,68,68,.12);--yellow-bg:rgba(245,158,11,.12);--blue-bg:rgba(59,130,246,.12);
+  --breaking:#ef4444;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  font-size:14px;
+}
+body{background:var(--bg);color:var(--text);min-height:100vh}
+.app{max-width:1400px;margin:0 auto;padding:16px}
+
+/* Header */
+.header{display:flex;align-items:center;gap:12px;padding:16px 0 24px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.header h1{font-size:1.25rem;font-weight:700;letter-spacing:-.02em}
+.header .subtitle{color:var(--text2);font-size:.8rem}
+.badge-schema-warn{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:4px 10px;font-size:.75rem;font-weight:600;display:none}
+.badge-schema-warn.visible{display:inline-flex;align-items:center;gap:6px}
+
+/* Panels */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.panel-title{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px;font-weight:600}
+
+/* Load section */
+.load-section{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-size:.85rem;font-weight:500;transition:background .15s,border-color .15s}
+.btn:hover{background:var(--surface3);border-color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn-sm{padding:5px 10px;font-size:.78rem}
+.file-count{color:var(--text2);font-size:.8rem}
+.load-placeholder{color:var(--text3);font-style:italic;font-size:.85rem}
+
+/* Run selectors */
+.run-selectors{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.run-selector label{display:block;font-size:.75rem;color:var(--text2);margin-bottom:5px;font-weight:500}
+select{width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem;outline:none;cursor:pointer}
+select:focus{border-color:var(--accent)}
+.selector-group{display:flex;flex-direction:column;gap:8px}
+.selector-row{display:flex;gap:8px;align-items:center}
+.side-label{font-size:.7rem;font-weight:700;padding:4px 8px;border-radius:5px;white-space:nowrap}
+.side-a{background:rgba(59,130,246,.2);color:#93c5fd}
+.side-b{background:rgba(168,85,247,.2);color:#c4b5fd}
+
+/* Toggle */
+.toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.toggle{position:relative;width:36px;height:20px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;inset:0;background:var(--surface3);border-radius:10px;transition:.2s}
+.toggle-slider::after{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.toggle-slider{background:var(--accent)}
+.toggle input:checked+.toggle-slider::after{transform:translateX(16px)}
+.toggle-label{font-size:.82rem;color:var(--text2)}
+
+/* Summary bar */
+.summary-bar{display:flex;gap:12px;flex-wrap:wrap;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:20px}
+.summary-stat{display:flex;flex-direction:column;align-items:center;min-width:72px}
+.summary-stat .num{font-size:1.5rem;font-weight:700;line-height:1}
+.summary-stat .lbl{font-size:.68rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.stat-breaking .num{color:var(--breaking)}
+.stat-added .num{color:var(--green)}
+.stat-removed .num{color:var(--red)}
+.stat-changed .num{color:var(--yellow)}
+.stat-depr .num{color:var(--orange)}
+.summary-divider{width:1px;background:var(--border);margin:0 4px}
+
+/* Filters */
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.search-box{flex:1;min-width:200px;max-width:320px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem;outline:none}
+.search-box:focus{border-color:var(--accent)}
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:5px 11px;border-radius:20px;font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid transparent;transition:.15s;user-select:none}
+.chip-all{border-color:var(--border);background:var(--surface2);color:var(--text2)}
+.chip-all.active{border-color:var(--accent);background:rgba(99,102,241,.15);color:var(--accent2)}
+.chip-added{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08);color:var(--green)}
+.chip-added.active{background:rgba(34,197,94,.2)}
+.chip-removed{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red)}
+.chip-removed.active{background:rgba(239,68,68,.2)}
+.chip-changed{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08);color:var(--yellow)}
+.chip-changed.active{background:rgba(245,158,11,.2)}
+.chip-breaking{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.12);color:var(--red);font-weight:700}
+.chip-breaking.active{background:rgba(239,68,68,.25)}
+.chip-unchanged{border-color:var(--border);background:var(--surface2);color:var(--text3)}
+.chip-unchanged.active{background:var(--surface3);color:var(--text2)}
+.chip-depr{border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--orange)}
+.chip-depr.active{background:rgba(249,115,22,.2)}
+
+/* Scenario switcher */
+.scenario-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.scenario-row label{font-size:.82rem;color:var(--text2)}
+.scenario-row select{width:auto;min-width:180px}
+
+/* Endpoint list */
+.endpoint-list{display:flex;flex-direction:column;gap:4px}
+.endpoint-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s}
+.endpoint-row:hover{border-color:var(--accent)}
+.endpoint-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none}
+.method-badge{font-size:.68rem;font-weight:700;padding:3px 7px;border-radius:5px;font-family:monospace;min-width:56px;text-align:center}
+.m-get{background:rgba(34,197,94,.2);color:#86efac}
+.m-post{background:rgba(59,130,246,.2);color:#93c5fd}
+.m-put{background:rgba(245,158,11,.2);color:#fcd34d}
+.m-patch{background:rgba(168,85,247,.2);color:#c4b5fd}
+.m-delete{background:rgba(239,68,68,.2);color:#fca5a5}
+.m-head,.m-options{background:rgba(100,116,139,.2);color:#94a3b8}
+.endpoint-path{font-family:monospace;font-size:.82rem;color:var(--text);flex:1;word-break:break-all}
+.verdict-badge{font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap}
+.v-added{background:var(--green-bg);color:var(--green)}
+.v-removed{background:var(--red-bg);color:var(--red)}
+.v-changed{background:var(--yellow-bg);color:var(--yellow)}
+.v-unchanged{background:var(--surface3);color:var(--text3)}
+.v-breaking{background:rgba(239,68,68,.2);color:var(--red);border:1px solid rgba(239,68,68,.4)}
+.scenario-badge{font-size:.65rem;padding:2px 7px;border-radius:4px;background:var(--surface3);color:var(--text3)}
+.dep-badge{font-size:.65rem;padding:2px 7px;border-radius:4px;background:rgba(249,115,22,.15);color:var(--orange)}
+.flag-badge{font-size:.65rem;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,.15);color:var(--yellow)}
+.assumed-badge{font-size:.65rem;padding:2px 7px;border-radius:4px;background:rgba(168,85,247,.15);color:var(--purple)}
+.expand-icon{margin-left:auto;color:var(--text3);transition:transform .2s;font-size:.9rem}
+.endpoint-row.open .expand-icon{transform:rotate(180deg)}
+
+/* Detail pane */
+.endpoint-detail{display:none;padding:0 14px 14px;border-top:1px solid var(--border);background:var(--surface)}
+.endpoint-row.open .endpoint-detail{display:block}
+.detail-section{margin-top:12px}
+.detail-section-title{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:8px;font-weight:600}
+.diff-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.diff-table th{text-align:left;padding:5px 10px;background:var(--surface2);color:var(--text2);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+.diff-table td{padding:6px 10px;border-bottom:1px solid var(--border);font-family:monospace;vertical-align:top}
+.diff-table tr:last-child td{border-bottom:none}
+.diff-table tr.row-added{background:var(--green-bg)}
+.diff-table tr.row-removed{background:var(--red-bg)}
+.diff-table tr.row-changed{background:var(--yellow-bg)}
+.diff-table tr.row-breaking{background:rgba(239,68,68,.15)}
+.cell-a{color:#93c5fd}
+.cell-b{color:#c4b5fd}
+.cell-verdict{font-family:sans-serif;font-size:.7rem;font-weight:700;white-space:nowrap}
+.val-none{color:var(--text3);font-style:italic;font-family:sans-serif}
+.assumed-note{background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:.8rem;color:var(--purple)}
+
+/* Export panel */
+.export-panel{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:100;overflow-y:auto;padding:24px}
+.export-panel.visible{display:flex;align-items:flex-start;justify-content:center}
+.export-inner{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:860px;padding:24px;position:relative;margin:auto}
+.export-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--text2);cursor:pointer;font-size:1.2rem;padding:4px 8px}
+.export-close:hover{color:var(--text)}
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:600px){.export-grid{grid-template-columns:1fr}}
+.export-section-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:10px;font-weight:600}
+.checkbox-group{display:flex;flex-direction:column;gap:6px}
+.checkbox-item{display:flex;align-items:center;gap:8px;cursor:pointer}
+.checkbox-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+.checkbox-item label{font-size:.82rem;color:var(--text2);cursor:pointer}
+.ep-list-export{max-height:200px;overflow-y:auto;background:var(--surface2);border-radius:8px;padding:8px}
+.ep-item{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer}
+.ep-item label{font-family:monospace;font-size:.75rem;color:var(--text2);cursor:pointer;flex:1;word-break:break-all}
+.text-input{width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem;outline:none;margin-bottom:8px}
+.text-input:focus{border-color:var(--accent)}
+textarea.text-input{resize:vertical;min-height:70px}
+.preview-box{background:var(--surface2);border-radius:8px;padding:12px;font-size:.78rem;color:var(--text2);max-height:280px;overflow-y:auto;border:1px solid var(--border)}
+
+/* Empty / loading states */
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
+.empty-state .icon{font-size:2.5rem;margin-bottom:12px}
+.empty-state p{font-size:.9rem}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Responsive */
+@media(max-width:700px){.run-selectors{grid-template-columns:1fr}}
+
+/* Only-scenario flag */
+.scenario-only-note{font-size:.72rem;color:var(--yellow);margin-left:6px}
+
+.ep-search{width:100%;padding:6px 8px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.78rem;margin-bottom:6px;outline:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <h1>API Diff Viewer</h1>
+      <div class="subtitle">Compare two SkyDome API probe snapshots</div>
+    </div>
+    <div class="badge-schema-warn" id="schemaWarn">⚠ Schema version mismatch — viewer may be out of date</div>
+  </div>
+
+  <!-- Load section -->
+  <div class="load-section">
+    <label class="btn btn-primary" for="folderInput">📂 Choose results folder</label>
+    <input type="file" id="folderInput" webkitdirectory multiple accept=".json" style="display:none">
+    <button class="btn" id="reloadBtn" style="display:none">↺ Reload</button>
+    <span class="file-count" id="fileCount"></span>
+  </div>
+
+  <!-- Run selectors -->
+  <div id="selectorArea" style="display:none">
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-title">Select runs to compare</div>
+      <div class="run-selectors">
+        <div class="selector-group">
+          <div class="selector-row">
+            <span class="side-label side-a">A</span>
+            <div style="flex:1">
+              <label>Version</label>
+              <select id="versionA"></select>
+            </div>
+          </div>
+          <div class="selector-row">
+            <span class="side-label side-a" style="visibility:hidden">A</span>
+            <div style="flex:1">
+              <label>Run</label>
+              <select id="runA"></select>
+            </div>
+          </div>
+        </div>
+        <div class="selector-group">
+          <div class="selector-row">
+            <span class="side-label side-b">B</span>
+            <div style="flex:1">
+              <label>Version</label>
+              <select id="versionB"></select>
+            </div>
+          </div>
+          <div class="selector-row">
+            <span class="side-label side-b" style="visibility:hidden">B</span>
+            <div style="flex:1">
+              <label>Run</label>
+              <select id="runB"></select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="latestOnlyToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-label">Latest run per version only</span>
+      </div>
+    </div>
+
+    <!-- Summary bar -->
+    <div class="summary-bar" id="summaryBar">
+      <div class="summary-stat stat-breaking"><span class="num" id="sumBreaking">0</span><span class="lbl">Breaking</span></div>
+      <div class="summary-divider"></div>
+      <div class="summary-stat stat-added"><span class="num" id="sumAdded">0</span><span class="lbl">Added</span></div>
+      <div class="summary-stat stat-removed"><span class="num" id="sumRemoved">0</span><span class="lbl">Removed</span></div>
+      <div class="summary-stat stat-changed"><span class="num" id="sumChanged">0</span><span class="lbl">Changed</span></div>
+      <div class="summary-divider"></div>
+      <div class="summary-stat stat-depr"><span class="num" id="sumDepr">0</span><span class="lbl">Deprecations</span></div>
+      <div class="summary-stat" style="color:var(--text2)"><span class="num" id="sumUnchanged">0</span><span class="lbl">Unchanged</span></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <input class="search-box" id="searchBox" type="text" placeholder="Filter by path...">
+      <div class="filter-chips">
+        <span class="chip chip-all active" data-filter="all">All</span>
+        <span class="chip chip-breaking" data-filter="breaking">⚡ Breaking</span>
+        <span class="chip chip-added" data-filter="added">+ Added</span>
+        <span class="chip chip-removed" data-filter="removed">− Removed</span>
+        <span class="chip chip-changed" data-filter="changed">~ Changed</span>
+        <span class="chip chip-depr" data-filter="deprecated">Deprecated</span>
+        <span class="chip chip-unchanged" data-filter="unchanged">Unchanged</span>
+      </div>
+    </div>
+
+    <!-- Scenario switcher -->
+    <div class="scenario-row">
+      <label>Scenario:</label>
+      <select id="scenarioSelect"><option value="all">All scenarios</option></select>
+    </div>
+
+    <!-- Endpoint list -->
+    <div class="endpoint-list" id="endpointList">
+      <div class="empty-state"><div class="icon">↑</div><p>Select two runs above to compare</p></div>
+    </div>
+  </div>
+
+  <div id="noRunsState" style="display:none">
+    <div class="empty-state"><div class="icon">📂</div><p>No snapshot files found. Choose a folder containing results/ with .json snapshot files.</p></div>
+  </div>
+</div>
+
+<!-- Export panel -->
+<div class="export-panel" id="exportPanel">
+  <div class="export-inner">
+    <button class="export-close" id="exportClose">✕</button>
+    <h2 style="font-size:1.1rem;margin-bottom:20px">Share Comparison</h2>
+    <div class="export-grid">
+      <div>
+        <div class="export-section-title">Title &amp; Note</div>
+        <input class="text-input" id="exportTitle" type="text" placeholder="Comparison title (optional)">
+        <textarea class="text-input" id="exportNote" placeholder="Note for recipient (optional)"></textarea>
+
+        <div class="export-section-title" style="margin-top:16px">Include categories</div>
+        <div class="checkbox-group" id="categoryToggles">
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="added"><label>Endpoint added</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="removed"><label>Endpoint removed</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="required_change"><label>Required-field changes</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="response_field"><label>Response-field changes</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="type_change"><label>Type changes</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="format_change"><label>Format changes</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="outcome_change"><label>Outcome changes</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="deprecation"><label>Deprecations</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="assumed_not_found"><label>Assumed not-found notes</label></label>
+          <label class="checkbox-item"><input type="checkbox" checked data-cat="registry_flags"><label>Registry flags</label></label>
+        </div>
+
+        <div class="export-section-title" style="margin-top:16px">Scenarios</div>
+        <div class="checkbox-group" id="scenarioToggles"></div>
+      </div>
+      <div>
+        <div class="export-section-title">Endpoints to include</div>
+        <input class="ep-search" id="epSearch" type="text" placeholder="Search endpoints...">
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <button class="btn btn-sm" id="epSelectAll">Select all</button>
+          <button class="btn btn-sm" id="epSelectNone">Select none</button>
+        </div>
+        <div class="ep-list-export" id="epListExport"></div>
+
+        <div class="export-section-title" style="margin-top:16px">Preview</div>
+        <div class="preview-box" id="exportPreview">Select options to see preview</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn" id="exportClose2">Cancel</button>
+      <button class="btn btn-primary" id="downloadBtn">⬇ Download HTML</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share button (floating) -->
+<div id="shareBtn" style="display:none;position:fixed;bottom:24px;right:24px;z-index:50">
+  <button class="btn btn-primary" id="openExport" style="box-shadow:0 4px 20px rgba(99,102,241,.4)">↗ Share comparison</button>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const S = {
+  files: [],       // FileList entries
+  snapshots: [],   // parsed snapshot objects
+  runA: null,
+  runB: null,
+  diff: [],        // computed diff rows
+  filter: 'all',
+  search: '',
+  scenario: 'all',
+  latestOnly: true,
+};
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+// ── Semver sort ────────────────────────────────────────────────────────────
+function parseSemver(v) {
+  const parts = String(v).split('.').map(x => parseInt(x, 10) || 0);
+  while (parts.length < 3) parts.push(0);
+  return parts;
+}
+function cmpSemver(a, b) {
+  const pa = parseSemver(a), pb = parseSemver(b);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  }
+  return 0;
+}
+
+// ── File loading ───────────────────────────────────────────────────────────
+$('folderInput').addEventListener('change', e => {
+  S.files = Array.from(e.target.files);
+  loadSnapshots();
+});
+$('reloadBtn').addEventListener('click', () => loadSnapshots());
+
+function loadSnapshots() {
+  const jsonFiles = S.files.filter(f => {
+    const p = f.webkitRelativePath || f.name;
+    // Skip _archive/ and report html
+    if (p.includes('/_archive/') || p.includes('\\_archive\\')) return false;
+    if (f.name.endsWith('.report.html')) return false;
+    if (!f.name.endsWith('.json')) return false;
+    return true;
+  });
+
+  if (!jsonFiles.length) {
+    $('selectorArea').style.display = 'none';
+    $('noRunsState').style.display = 'block';
+    $('reloadBtn').style.display = 'inline-flex';
+    $('fileCount').textContent = 'No snapshot files found';
+    return;
+  }
+
+  $('noRunsState').style.display = 'none';
+  $('fileCount').textContent = `Loading ${jsonFiles.length} file(s)...`;
+
+  const readers = jsonFiles.map(f => new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const snap = JSON.parse(ev.target.result);
+        if (!snap.schema_version) { resolve(null); return; }
+        resolve(snap);
+      } catch { resolve(null); }
+    };
+    r.readAsText(f);
+  }));
+
+  Promise.all(readers).then(results => {
+    S.snapshots = results.filter(Boolean);
+    $('fileCount').textContent = `${S.snapshots.length} snapshot(s) loaded`;
+    $('reloadBtn').style.display = 'inline-flex';
+    $('selectorArea').style.display = 'block';
+    buildSelectors();
+  });
+}
+
+// ── Selectors ──────────────────────────────────────────────────────────────
+function buildSelectors() {
+  const snapshots = S.snapshots;
+  // Group by version
+  const byVersion = {};
+  for (const s of snapshots) {
+    const v = s.version || 'unknown';
+    if (!byVersion[v]) byVersion[v] = [];
+    byVersion[v].push(s);
+  }
+  // Sort runs within version by captured_at
+  for (const v of Object.keys(byVersion)) {
+    byVersion[v].sort((a, b) => (a.captured_at || '').localeCompare(b.captured_at || ''));
+  }
+  S._byVersion = byVersion;
+
+  const versions = Object.keys(byVersion).sort(cmpSemver);
+
+  function fillVersionSelect(selId) {
+    const sel = $(selId);
+    const prev = sel.value;
+    sel.innerHTML = versions.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if (prev && versions.includes(prev)) sel.value = prev;
+  }
+  fillVersionSelect('versionA');
+  fillVersionSelect('versionB');
+
+  // Default A to oldest, B to newest
+  if (versions.length >= 2) {
+    $('versionA').value = versions[0];
+    $('versionB').value = versions[versions.length - 1];
+  } else if (versions.length === 1) {
+    $('versionA').value = versions[0];
+    $('versionB').value = versions[0];
+  }
+
+  fillRunSelects();
+
+  $('versionA').onchange = () => { fillRunSelects(); runDiff(); };
+  $('versionB').onchange = () => { fillRunSelects(); runDiff(); };
+  $('runA').onchange = runDiff;
+  $('runB').onchange = runDiff;
+  $('latestOnlyToggle').onchange = () => {
+    S.latestOnly = $('latestOnlyToggle').checked;
+    fillRunSelects(); runDiff();
+  };
+
+  runDiff();
+}
+
+function fillRunSelects() {
+  S.latestOnly = $('latestOnlyToggle').checked;
+  fillRunSelect('runA', $('versionA').value);
+  fillRunSelect('runB', $('versionB').value);
+}
+
+function fillRunSelect(selId, version) {
+  const sel = $(selId);
+  const prev = sel.value;
+  let runs = (S._byVersion[version] || []).slice();
+  if (S.latestOnly) {
+    runs = runs.slice(-1); // just the latest
+  }
+  sel.innerHTML = runs.map(s =>
+    `<option value="${esc(s.run_id)}">${esc(s.build || s.run_id)} — ${fmtTime(s.captured_at)}</option>`
+  ).join('');
+  if (prev && runs.some(r => r.run_id === prev)) sel.value = prev;
+}
+
+function getSelectedSnap(runSelId) {
+  const runId = $(runSelId).value;
+  return S.snapshots.find(s => s.run_id === runId) || null;
+}
+
+// ── Diff engine ────────────────────────────────────────────────────────────
+function runDiff() {
+  const snapA = getSelectedSnap('runA');
+  const snapB = getSelectedSnap('runB');
+
+  // Schema version check
+  if (snapA && snapB) {
+    const majA = parseInt((snapA.schema_version || '1').split('.')[0]);
+    const majB = parseInt((snapB.schema_version || '1').split('.')[0]);
+    const myMaj = 1;
+    if (majA > myMaj || majB > myMaj) {
+      $('schemaWarn').classList.add('visible');
+    } else {
+      $('schemaWarn').classList.remove('visible');
+    }
+  }
+
+  if (!snapA || !snapB) {
+    S.diff = [];
+    renderList();
+    return;
+  }
+
+  S.runA = snapA;
+  S.runB = snapB;
+
+  // Build index: (path, method, scenario) → endpoint entry
+  function buildIndex(snap) {
+    const idx = {};
+    for (const ep of (snap.endpoints || [])) {
+      const key = `${ep.path}||${ep.method}||${ep.scenario}`;
+      idx[key] = ep;
+    }
+    return idx;
+  }
+
+  const idxA = buildIndex(snapA);
+  const idxB = buildIndex(snapB);
+  const allKeys = new Set([...Object.keys(idxA), ...Object.keys(idxB)]);
+
+  // Collect all scenarios
+  const scenariosA = new Set((snapA.endpoints || []).map(e => e.scenario));
+  const scenariosB = new Set((snapB.endpoints || []).map(e => e.scenario));
+  const allScenarios = new Set([...scenariosA, ...scenariosB]);
+
+  // Build scenario select
+  const scenSel = $('scenarioSelect');
+  const prevScen = scenSel.value;
+  scenSel.innerHTML = '<option value="all">All scenarios</option>' +
+    [...allScenarios].sort().map(sc =>
+      `<option value="${esc(sc)}">${esc(sc)}${!scenariosA.has(sc)||!scenariosB.has(sc)?'  ⚠':''}  </option>`
+    ).join('');
+  if (prevScen && [...allScenarios, 'all'].includes(prevScen)) scenSel.value = prevScen;
+
+  // Determine deprecation labels from newer registry_version snap
+  const regA = (snapA.registry || {}).registry_version || 0;
+  const regB = (snapB.registry || {}).registry_version || 0;
+  const newerSnap = regB >= regA ? snapB : snapA;
+
+  const diff = [];
+
+  for (const key of allKeys) {
+    const epA = idxA[key] || null;
+    const epB = idxB[key] || null;
+    const [path, method, scenario] = key.split('||');
+
+    // Assumed not-found logic
+    const isAssumedA = epA === null;
+    const isAssumedB = epB === null;
+
+    const existsA = epA ? (epA.exists !== false) : false;
+    const existsB = epB ? (epB.exists !== false) : false;
+
+    // If both absent (shouldn't happen) skip
+    if (isAssumedA && isAssumedB) continue;
+
+    // If the recorded side doesn't exist, and the other is assumed → no diff
+    if (isAssumedA && !existsB) continue;
+    if (isAssumedB && !existsA) continue;
+
+    const changes = [];
+    let isBreaking = false;
+    let isAssumed = false;
+    let assumedNote = null;
+
+    // Existence change
+    if (existsA !== existsB) {
+      const chg = {
+        category: existsB ? 'added' : 'removed',
+        label: existsB ? 'Endpoint added' : 'Endpoint removed',
+        breaking: !existsB,
+      };
+      if (isAssumedA) {
+        isAssumed = true;
+        assumedNote = `Not probed in run A; assumed to return ${snapA.not_found_signature ? snapA.not_found_signature.status : 'not-found'} (${(snapA.not_found_signature || {}).content_type || ''})`;
+        chg.assumed = true;
+      }
+      if (isAssumedB) {
+        isAssumed = true;
+        assumedNote = `Not probed in run B; assumed to return ${snapB.not_found_signature ? snapB.not_found_signature.status : 'not-found'} (${(snapB.not_found_signature || {}).content_type || ''})`;
+        chg.assumed = true;
+      }
+      if (chg.breaking) isBreaking = true;
+      changes.push(chg);
+    }
+
+    if (epA && epB && existsA && existsB) {
+      // Outcome changes
+      const outA = epA.outcomes || {};
+      const outB = epB.outcomes || {};
+      const outKeys = new Set([...Object.keys(outA), ...Object.keys(outB)]);
+      for (const ok of outKeys) {
+        const vA = outA[ok] ? outA[ok].status : null;
+        const vB = outB[ok] ? outB[ok].status : null;
+        if (vA !== vB) {
+          const breaking = ok === 'baseline' && vA && vB && (vA < 400) && (vB >= 400);
+          changes.push({
+            category: 'outcome_change',
+            label: `Outcome: ${ok}`,
+            valA: vA != null ? String(vA) : '—',
+            valB: vB != null ? String(vB) : '—',
+            breaking,
+          });
+          if (breaking) isBreaking = true;
+        }
+      }
+
+      // Request field changes
+      const rfA = epA.request_fields || {};
+      const rfB = epB.request_fields || {};
+      const rfKeys = new Set([...Object.keys(rfA), ...Object.keys(rfB)]);
+      for (const fk of rfKeys) {
+        const fa = rfA[fk] || null;
+        const fb = rfB[fk] || null;
+        if (!fa && fb) {
+          changes.push({ category: 'required_change', label: `Request field added: ${fk}`, valA: '—', valB: `${fb.type || ''}${fb.required ? ' (required)' : ' (optional)'}`, breaking: !!fb.required });
+          if (fb.required) isBreaking = true;
+        } else if (fa && !fb) {
+          changes.push({ category: 'required_change', label: `Request field removed: ${fk}`, valA: `${fa.type || ''}${fa.required ? ' (required)' : ' (optional)'}`, valB: '—', breaking: false });
+        } else if (fa && fb) {
+          if (fa.required !== fb.required) {
+            const breaking = !fa.required && fb.required;
+            changes.push({ category: 'required_change', label: `Field requiredness: ${fk}`, valA: fa.required ? 'required' : 'optional', valB: fb.required ? 'required' : 'optional', breaking });
+            if (breaking) isBreaking = true;
+          }
+          if (fa.type !== fb.type) {
+            changes.push({ category: 'type_change', label: `Request field type: ${fk}`, valA: fa.type || '—', valB: fb.type || '—', breaking: true });
+            isBreaking = true;
+          }
+        }
+      }
+
+      // Response schema changes
+      const rsA = epA.response_schema || {};
+      const rsB = epB.response_schema || {};
+      const rsKeys = new Set([...Object.keys(rsA), ...Object.keys(rsB)]);
+      for (const rk of rsKeys) {
+        const ra = rsA[rk] || null;
+        const rb = rsB[rk] || null;
+        if (!ra && rb) {
+          changes.push({ category: 'response_field', label: `Response field added: ${rk}`, valA: '—', valB: `${rb.type || ''}`, breaking: false });
+        } else if (ra && !rb) {
+          changes.push({ category: 'response_field', label: `Response field removed: ${rk}`, valA: `${ra.type || ''}`, valB: '—', breaking: true });
+          isBreaking = true;
+        } else if (ra && rb) {
+          if (ra.type !== rb.type) {
+            changes.push({ category: 'type_change', label: `Response field type: ${rk}`, valA: `${ra.type || '—'}`, valB: `${rb.type || '—'}`, breaking: true });
+            isBreaking = true;
+          } else if (ra.format !== rb.format) {
+            const fmtNote = (snapA.format_detectors_version !== snapB.format_detectors_version)
+              ? ' ⚠ detector versions differ' : '';
+            changes.push({ category: 'format_change', label: `Response field format: ${rk}`, valA: ra.format || '—', valB: rb.format || '—', breaking: false, note: fmtNote });
+          }
+        }
+      }
+    }
+
+    // Deprecation — from newer registry snap
+    const deprecatedEntry = (newerSnap.endpoints || []).find(e => e.path === path && e.method === method && e.scenario === scenario);
+    const depInfo = (epA && epA.deprecated) || (epB && epB.deprecated) || (deprecatedEntry && deprecatedEntry.deprecated) || null;
+    if (depInfo) {
+      changes.push({ category: 'deprecation', label: `Deprecated since ${depInfo.in || '?'}${depInfo.stopped_working_in ? ` (stopped working in ${depInfo.stopped_working_in})` : ''}`, breaking: false });
+    }
+
+    // Registry flags
+    const flagsA = (epA && epA.registry_flags) ? epA.registry_flags : [];
+    const flagsB = (epB && epB.registry_flags) ? epB.registry_flags : [];
+    const allFlags = [...new Set([...flagsA, ...flagsB])];
+    if (allFlags.length) {
+      changes.push({ category: 'registry_flags', label: `Registry flags: ${allFlags.join(', ')}`, breaking: false });
+    }
+
+    let verdict = 'unchanged';
+    if (changes.some(c => c.category === 'added')) verdict = 'added';
+    else if (changes.some(c => c.category === 'removed')) verdict = 'removed';
+    else if (changes.length > 0) verdict = 'changed';
+    if (isBreaking && verdict !== 'added' && verdict !== 'removed') verdict = 'changed';
+
+    diff.push({ path, method, scenario, verdict, isBreaking, isAssumed, assumedNote, changes, depInfo, flagsA, flagsB, epA, epB });
+  }
+
+  // Sort: breaking first, then by verdict, then path+method
+  const vord = { removed: 0, added: 1, changed: 2, unchanged: 3 };
+  diff.sort((a, b) => {
+    if (a.isBreaking !== b.isBreaking) return a.isBreaking ? -1 : 1;
+    if (a.verdict !== b.verdict) return (vord[a.verdict] || 99) - (vord[b.verdict] || 99);
+    return (a.path + a.method).localeCompare(b.path + b.method);
+  });
+
+  S.diff = diff;
+
+  // Compute summary
+  let breaking = 0, added = 0, removed = 0, changed = 0, depr = 0, unchanged = 0;
+  for (const d of diff) {
+    if (d.isBreaking) breaking++;
+    if (d.verdict === 'added') added++;
+    else if (d.verdict === 'removed') removed++;
+    else if (d.verdict === 'changed') changed++;
+    else unchanged++;
+    if (d.depInfo) depr++;
+  }
+  $('sumBreaking').textContent = breaking;
+  $('sumAdded').textContent = added;
+  $('sumRemoved').textContent = removed;
+  $('sumChanged').textContent = changed;
+  $('sumDepr').textContent = depr;
+  $('sumUnchanged').textContent = unchanged;
+
+  $('shareBtn').style.display = diff.length ? 'block' : 'none';
+
+  renderList();
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+$('searchBox').addEventListener('input', e => { S.search = e.target.value.toLowerCase(); renderList(); });
+$('scenarioSelect').addEventListener('change', e => { S.scenario = e.target.value; renderList(); });
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    S.filter = chip.dataset.filter;
+    renderList();
+  });
+});
+
+function renderList() {
+  const list = $('endpointList');
+  const diff = S.diff;
+
+  if (!diff.length) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">↑</div><p>Select two runs above to compare</p></div>';
+    return;
+  }
+
+  let rows = diff;
+
+  // Scenario filter
+  if (S.scenario !== 'all') {
+    rows = rows.filter(r => r.scenario === S.scenario);
+  }
+
+  // Search filter
+  if (S.search) {
+    rows = rows.filter(r => r.path.toLowerCase().includes(S.search) || r.method.toLowerCase().includes(S.search));
+  }
+
+  // Chip filter
+  if (S.filter === 'breaking') rows = rows.filter(r => r.isBreaking);
+  else if (S.filter === 'added') rows = rows.filter(r => r.verdict === 'added');
+  else if (S.filter === 'removed') rows = rows.filter(r => r.verdict === 'removed');
+  else if (S.filter === 'changed') rows = rows.filter(r => r.verdict === 'changed');
+  else if (S.filter === 'deprecated') rows = rows.filter(r => !!r.depInfo);
+  else if (S.filter === 'unchanged') rows = rows.filter(r => r.verdict === 'unchanged');
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>No endpoints match the current filter</p></div>';
+    return;
+  }
+
+  list.innerHTML = rows.map(r => renderRow(r)).join('');
+
+  // Attach expand handlers
+  list.querySelectorAll('.endpoint-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.closest('.endpoint-row').classList.toggle('open');
+    });
+  });
+}
+
+function methodClass(m) {
+  const map = { GET:'m-get', POST:'m-post', PUT:'m-put', PATCH:'m-patch', DELETE:'m-delete', HEAD:'m-head', OPTIONS:'m-options' };
+  return map[(m||'').toUpperCase()] || 'm-get';
+}
+
+function verdictClass(v, isBreaking) {
+  if (isBreaking) return 'v-breaking';
+  return { added:'v-added', removed:'v-removed', changed:'v-changed', unchanged:'v-unchanged' }[v] || 'v-unchanged';
+}
+
+function verdictLabel(v, isBreaking) {
+  if (isBreaking) return '⚡ BREAKING';
+  return { added:'ADDED', removed:'REMOVED', changed:'CHANGED', unchanged:'UNCHANGED' }[v] || v.toUpperCase();
+}
+
+function renderRow(r) {
+  const badges = [
+    `<span class="scenario-badge">${esc(r.scenario)}</span>`,
+    r.depInfo ? `<span class="dep-badge">DEPRECATED</span>` : '',
+    (r.flagsA.length || r.flagsB.length) ? `<span class="flag-badge">⚑ flags</span>` : '',
+    r.isAssumed ? `<span class="assumed-badge">assumed</span>` : '',
+  ].filter(Boolean).join(' ');
+
+  const vclass = verdictClass(r.verdict, r.isBreaking);
+  const vlabel = verdictLabel(r.verdict, r.isBreaking);
+
+  const detail = renderDetail(r);
+
+  return `<div class="endpoint-row">
+    <div class="endpoint-header">
+      <span class="method-badge ${methodClass(r.method)}">${esc(r.method)}</span>
+      <span class="endpoint-path">${esc(r.path)}</span>
+      ${badges}
+      <span class="verdict-badge ${vclass}">${vlabel}</span>
+      <span class="expand-icon">▾</span>
+    </div>
+    <div class="endpoint-detail">${detail}</div>
+  </div>`;
+}
+
+function renderDetail(r) {
+  if (!r.changes.length && !r.assumedNote) {
+    return '<p style="color:var(--text3);font-size:.82rem;padding-top:4px">No differences detected in this scenario.</p>';
+  }
+
+  let html = '';
+
+  if (r.assumedNote) {
+    html += `<div class="assumed-note">ℹ <strong>Assumed not-found:</strong> ${esc(r.assumedNote)}</div>`;
+  }
+
+  // Group changes by category
+  const catChanges = {};
+  for (const c of r.changes) {
+    if (!catChanges[c.category]) catChanges[c.category] = [];
+    catChanges[c.category].push(c);
+  }
+
+  const catOrder = ['added','removed','outcome_change','required_change','type_change','format_change','response_field','deprecation','registry_flags'];
+  const catTitles = {
+    added:'Endpoint', removed:'Endpoint', outcome_change:'Outcome Changes',
+    required_change:'Request Field Changes', type_change:'Type Changes',
+    format_change:'Format Changes', response_field:'Response Field Changes',
+    deprecation:'Deprecation', registry_flags:'Registry Flags'
+  };
+
+  for (const cat of [...catOrder, ...Object.keys(catChanges).filter(k => !catOrder.includes(k))]) {
+    const chgs = catChanges[cat];
+    if (!chgs) continue;
+
+    html += `<div class="detail-section">
+      <div class="detail-section-title">${esc(catTitles[cat] || cat)}</div>
+      <table class="diff-table">
+        <thead><tr><th>Change</th><th class="cell-a">A</th><th class="cell-b">B</th><th>Verdict</th></tr></thead>
+        <tbody>`;
+
+    for (const c of chgs) {
+      let rowClass = '';
+      if (c.category === 'added') rowClass = 'row-added';
+      else if (c.category === 'removed') rowClass = 'row-removed';
+      else if (c.breaking) rowClass = 'row-breaking';
+      else if (c.valA !== undefined || c.valB !== undefined) rowClass = 'row-changed';
+
+      const vA = c.valA !== undefined ? esc(c.valA) : '<span class="val-none">—</span>';
+      const vB = c.valB !== undefined ? esc(c.valB) : '<span class="val-none">—</span>';
+      const verdict = c.breaking ? '⚡ BREAKING' : (c.category === 'added' ? 'ADDED' : c.category === 'removed' ? 'REMOVED' : c.valA !== undefined ? 'CHANGED' : '');
+      const vcolor = c.breaking ? 'color:var(--red)' : c.category === 'added' ? 'color:var(--green)' : c.category === 'removed' ? 'color:var(--red)' : 'color:var(--yellow)';
+      const note = c.note ? `<br><span style="color:var(--yellow);font-size:.7rem">${esc(c.note)}</span>` : '';
+
+      html += `<tr class="${rowClass}">
+        <td>${esc(c.label)}${note}</td>
+        <td>${vA}</td>
+        <td>${vB}</td>
+        <td class="cell-verdict" style="${vcolor}">${verdict}</td>
+      </tr>`;
+    }
+
+    html += '</tbody></table></div>';
+  }
+
+  return html;
+}
+
+// ── Export panel ───────────────────────────────────────────────────────────
+$('openExport').addEventListener('click', openExport);
+$('exportClose').addEventListener('click', () => $('exportPanel').classList.remove('visible'));
+$('exportClose2').addEventListener('click', () => $('exportPanel').classList.remove('visible'));
+
+function openExport() {
+  $('exportPanel').classList.add('visible');
+
+  // Populate endpoint picker
+  const changed = S.diff.filter(d => d.verdict !== 'unchanged');
+  const epList = $('epListExport');
+  epList.innerHTML = changed.map(d =>
+    `<label class="ep-item">
+      <input type="checkbox" class="ep-cb" checked value="${esc(d.path+'||'+d.method+'||'+d.scenario)}">
+      <label>${esc(d.method)} ${esc(d.path)} <span style="color:var(--text3);font-size:.7rem">${esc(d.scenario)}</span></label>
+    </label>`
+  ).join('');
+
+  // Populate scenario toggles
+  const allScenarios = [...new Set(S.diff.map(d => d.scenario))].sort();
+  $('scenarioToggles').innerHTML = allScenarios.map(sc =>
+    `<label class="checkbox-item"><input type="checkbox" checked data-scen="${esc(sc)}"><label>${esc(sc)}</label></label>`
+  ).join('');
+
+  updateExportPreview();
+}
+
+$('epSearch').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  $('epListExport').querySelectorAll('.ep-item').forEach(item => {
+    const lbl = item.querySelector('label').textContent.toLowerCase();
+    item.style.display = lbl.includes(q) ? '' : 'none';
+  });
+});
+$('epSelectAll').addEventListener('click', () => {
+  $('epListExport').querySelectorAll('.ep-cb').forEach(cb => cb.checked = true);
+  updateExportPreview();
+});
+$('epSelectNone').addEventListener('click', () => {
+  $('epListExport').querySelectorAll('.ep-cb').forEach(cb => cb.checked = false);
+  updateExportPreview();
+});
+
+$('exportPanel').addEventListener('change', updateExportPreview);
+$('exportTitle').addEventListener('input', updateExportPreview);
+$('exportNote').addEventListener('input', updateExportPreview);
+
+function getExportConfig() {
+  const cats = {};
+  document.querySelectorAll('#categoryToggles input[type=checkbox]').forEach(cb => {
+    cats[cb.dataset.cat] = cb.checked;
+  });
+  const scens = new Set();
+  document.querySelectorAll('#scenarioToggles input[type=checkbox]').forEach(cb => {
+    if (cb.checked) scens.add(cb.dataset.scen);
+  });
+  const eps = new Set();
+  document.querySelectorAll('.ep-cb:checked').forEach(cb => eps.add(cb.value));
+  return { cats, scens, eps, title: $('exportTitle').value, note: $('exportNote').value };
+}
+
+function buildExportData(cfg) {
+  const { cats, scens, eps } = cfg;
+  const rows = S.diff.filter(d => {
+    if (!eps.has(d.path+'||'+d.method+'||'+d.scenario)) return false;
+    if (!scens.has(d.scenario)) return false;
+    return true;
+  });
+  // Filter changes by category
+  return rows.map(r => {
+    const changes = r.changes.filter(c => {
+      if (!cats[c.category]) return false;
+      if (c.assumed && !cats['assumed_not_found']) return false;
+      return true;
+    });
+    return { ...r, changes };
+  }).filter(r => r.changes.length > 0);
+}
+
+function updateExportPreview() {
+  const cfg = getExportConfig();
+  const data = buildExportData(cfg);
+  const box = $('exportPreview');
+  if (!data.length) { box.textContent = 'Nothing to include with current selection.'; return; }
+  box.innerHTML = `<strong>${esc(cfg.title || 'API Comparison')}</strong><br>` +
+    (cfg.note ? `<em>${esc(cfg.note)}</em><br><br>` : '<br>') +
+    data.map(r => `${esc(r.method)} ${esc(r.path)} [${esc(r.scenario)}]: ${r.changes.length} change(s)`).join('<br>');
+}
+
+$('downloadBtn').addEventListener('click', () => {
+  const cfg = getExportConfig();
+  const data = buildExportData(cfg);
+  const html = buildExportHTML(cfg, data);
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
+  a.download = `api-comparison-${ts}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+function buildExportHTML(cfg, data) {
+  const snapA = S.runA, snapB = S.runB;
+  const title = cfg.title || 'API Comparison';
+  const now = new Date().toISOString().slice(0, 10);
+
+  function runInfo(s) {
+    if (!s) return '—';
+    return `${esc(s.version)} build ${esc(s.build || '?')} (${fmtTime(s.captured_at)}, registry v${(s.registry||{}).registry_version||'?'})`;
+  }
+
+  const rows = data.map(r => {
+    const catTitles = {
+      added:'Endpoint', removed:'Endpoint', outcome_change:'Outcome Changes',
+      required_change:'Request Field Changes', type_change:'Type Changes',
+      format_change:'Format Changes', response_field:'Response Field Changes',
+      deprecation:'Deprecation', registry_flags:'Registry Flags'
+    };
+    const catChanges = {};
+    for (const c of r.changes) {
+      if (!catChanges[c.category]) catChanges[c.category] = [];
+      catChanges[c.category].push(c);
+    }
+    const sections = Object.entries(catChanges).map(([cat, chgs]) => `
+      <h4>${esc(catTitles[cat]||cat)}</h4>
+      <table>
+        <thead><tr><th>Change</th><th>A</th><th>B</th><th>Verdict</th></tr></thead>
+        <tbody>${chgs.map(c => `<tr class="${c.breaking?'breaking':c.category}">
+          <td>${esc(c.label)}${c.note ? ` <span class="note">${esc(c.note)}</span>` : ''}</td>
+          <td>${c.valA !== undefined ? esc(c.valA) : '—'}</td>
+          <td>${c.valB !== undefined ? esc(c.valB) : '—'}</td>
+          <td class="${c.breaking?'verdict-breaking':c.category==='added'?'verdict-added':c.category==='removed'?'verdict-removed':'verdict-changed'}">${c.breaking?'BREAKING':c.category==='added'?'ADDED':c.category==='removed'?'REMOVED':'CHANGED'}</td>
+        </tr>`).join('')}</tbody>
+      </table>`).join('');
+    return `<div class="endpoint">
+      <h3><span class="method-badge">${esc(r.method)}</span> ${esc(r.path)} <span class="scenario">[${esc(r.scenario)}]</span>${r.isBreaking?' <span class="breaking-badge">BREAKING</span>':''}</h3>
+      ${r.isAssumed && r.assumedNote ? `<p class="assumed-note">ℹ ${esc(r.assumedNote)}</p>` : ''}
+      ${sections}
+    </div>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${esc(title)}</title>
+<style>
+@media print{body{font-size:10pt}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:960px;margin:0 auto;padding:24px;color:#1e293b;background:#fff}
+h1{font-size:1.4rem;border-bottom:2px solid #6366f1;padding-bottom:8px;margin-bottom:4px}
+h2{font-size:1rem;color:#64748b;font-weight:400;margin-bottom:20px}
+h3{font-size:.95rem;background:#f1f5f9;padding:8px 12px;border-radius:6px;display:flex;align-items:center;gap:8px;margin:20px 0 10px;flex-wrap:wrap}
+h4{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin:12px 0 6px}
+.method-badge{font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:4px;background:#e0e7ff;color:#3730a3;font-family:monospace}
+.scenario{font-size:.75rem;color:#94a3b8}
+.breaking-badge{font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:4px;background:#fee2e2;color:#dc2626}
+table{width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:12px}
+th{text-align:left;padding:5px 10px;background:#f8fafc;color:#64748b;font-weight:600;font-size:.72rem;text-transform:uppercase;border-bottom:1px solid #e2e8f0}
+td{padding:5px 10px;border-bottom:1px solid #f1f5f9;font-family:monospace}
+tr.breaking td:first-child::before{content:'⚡ '}
+.verdict-breaking{color:#dc2626;font-family:sans-serif;font-size:.75rem;font-weight:700}
+.verdict-added{color:#16a34a;font-family:sans-serif;font-size:.75rem;font-weight:700}
+.verdict-removed{color:#dc2626;font-family:sans-serif;font-size:.75rem;font-weight:700}
+.verdict-changed{color:#d97706;font-family:sans-serif;font-size:.75rem;font-weight:700}
+.breaking{background:#fff5f5}
+.added{background:#f0fdf4}
+.removed{background:#fff5f5}
+.assumed-note{background:#faf5ff;border:1px solid #d8b4fe;border-radius:6px;padding:8px;font-size:.8rem;color:#7e22ce;font-family:sans-serif}
+.note{color:#d97706;font-family:sans-serif;font-size:.72rem}
+.endpoint{border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:16px}
+.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:.75rem;color:#94a3b8}
+</style>
+</head>
+<body>
+<h1>${esc(title)}</h1>
+<h2>${cfg.note ? esc(cfg.note) : ''}</h2>
+${rows}
+<div class="footer">
+  <strong>Run A:</strong> ${runInfo(snapA)}<br>
+  <strong>Run B:</strong> ${runInfo(snapB)}<br>
+  <strong>Generated:</strong> ${now}<br>
+  <em>This comparison has been filtered. Not all endpoints or change categories may be included.</em>
+</div>
+</body>
+</html>`;
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtTime(iso) {
+  if (!iso) return '?';
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+</script>
+</body>
+</html>
