@@ -4,27 +4,11 @@ import copy
 import re
 
 from .baseline import matches_not_found
-from .matrix import substitute_params, _safe_json
+from .matrix import substitute_params, _safe_json, _extract_id_from_response
 from .registry import get_listed_methods, extract_path_params
 
 
 WRITABLE_METHODS = {"POST", "PUT", "PATCH"}
-
-
-def _extract_id_from_response(body) -> str | None:
-    """Try to find an ID field in a response body for cleanup."""
-    if not isinstance(body, dict):
-        return None
-    for key in ("_id", "id", "featureId"):
-        val = body.get(key)
-        if val:
-            return str(val)
-        data = body.get("data")
-        if isinstance(data, dict):
-            val = data.get(key)
-            if val:
-                return str(val)
-    return None
 
 
 def run_ablation(

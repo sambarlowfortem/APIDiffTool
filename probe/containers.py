@@ -21,12 +21,6 @@ SCENARIOS = {
         "dronehunter-2": False,
         "dronehunter-3": False,
     },
-    "multiple_hunters": {
-        "dronehangar": True,
-        "dronehunter-1": True,
-        "dronehunter-2": True,
-        "dronehunter-3": True,
-    },
 }
 
 

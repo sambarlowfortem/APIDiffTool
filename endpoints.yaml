@@ -1,4 +1,4 @@
-registry_version: 3
+registry_version: 4
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
 # Five spot-checked endpoints at the end of this file.
@@ -1139,19 +1139,80 @@ endpoints:
     methods: [GET, POST]
     body:
       POST:
-        id: "X00330136"
-        mobile: false
+        angle: 120
         calibrated: false
-        transmit: true
-        host: "172.16.0.47"
-        port: 9991
+        config:
+          advanced:
+            categories: ["drone"]
+            centerFreqMhz: null
+            cpi: 0.128
+            groundFilterNoiseScaleFactor: 1.5
+            groundFilterThresholdMeters: 10
+            maxAzimuthDeg: 90
+            maxElevationDeg: 90
+            minAzimuthDeg: -90
+            minElevationDeg: -90
+            minRcsDbsm: -35
+            notchSpeed: 0
+            profileImm: 6
+            rangeResolution: 4
+            stationaryTrackThreshold: 3
+          hotspotMasks:
+            filters: []
+            lla: []
+            rpy: []
+          multiRdr:
+            requireHighPrecisionTimeSource: null
+            timingSlot: 1
+          position:
+            fixedAgl: 0
+            fixedRadarHaeAltitude: 1350
+            fixedRadarLatitude: 40.34842
+            fixedRadarLongitude: -111.758634
+            fixedRadarPitch: 33
+            fixedRadarRoll: 1.8100545
+            fixedRadarYaw: 90
+          standard:
+            fov: 1
+            maxDistance: 4000
         configPort: 9990
+        horizontalFOV:
+          - [40.34842, -111.758634]
+          - [40.35756440138819, -111.75170550084829]
+          - [40.36335142874933, -111.73903556280834]
+          - [40.361690608137174, -111.72845943560293]
+          - [40.35583230750806, -111.72230467249909]
+          - [40.348413252365646, -111.7190479472016]
+          - [40.340996328882014, -111.72231266300895]
+          - [40.33514155380995, -111.72847131114133]
+          - [40.33348526490932, -111.73904423948602]
+          - [40.33927518531915, -111.75170737940414]
+        host: "172.16.0.47"
+        id: "X00330136"
+        mainAltSensor: true
+        mobile: false
         model: "R40"
         name: "Radar X00330136"
-        notes: ""
+        notes: null
+        password: "MEGgrq5iT21P2R2g"
+        port: 9991
+        range: 4000
+        simulateGpsLoss: false
+        simulated: false
+        status: "ON"
+        transmit: true
         useTrackElevationFilter: false
         username: "TEST"
-        password: "MEGgrq5iT21P2R2g"
+        version: "4.3.0"
+        verticalFOV:
+          - [0, 1350]
+          - [831.6467632710378, 5262.590402935222]
+          - [1815.9619989581875, 4914.0260967534705]
+          - [2676.522425435433, 4322.579301909576]
+          - [3354.6822717816963, 3528.556140060108]
+          - [3804.226065180614, 2586.06797749979]
+          - [3994.518139018295, 1559.3438249717753]
+          - [3912.5904029352228, 518.3532367289628]
 
   - path: /api/v2/sensors/radars/{host}/{port}/test
     methods: [GET]
@@ -1223,18 +1284,80 @@ endpoints:
       id: { from: "POST /api/v2/sensors/radars", field: "_id" }
     body:
       PUT:
-        id: "X00330136"
-        mobile: false
+        angle: 120
         calibrated: false
-        transmit: true
-        host: "172.16.0.47"
-        port: 9991
+        config:
+          advanced:
+            categories: ["drone"]
+            centerFreqMhz: null
+            cpi: 0.128
+            groundFilterNoiseScaleFactor: 1.5
+            groundFilterThresholdMeters: 10
+            maxAzimuthDeg: 90
+            maxElevationDeg: 90
+            minAzimuthDeg: -90
+            minElevationDeg: -90
+            minRcsDbsm: -35
+            notchSpeed: 0
+            profileImm: 6
+            rangeResolution: 4
+            stationaryTrackThreshold: 3
+          hotspotMasks:
+            filters: []
+            lla: []
+            rpy: []
+          multiRdr:
+            requireHighPrecisionTimeSource: null
+            timingSlot: 1
+          position:
+            fixedAgl: 0
+            fixedRadarHaeAltitude: 1350
+            fixedRadarLatitude: 40.34842
+            fixedRadarLongitude: -111.758634
+            fixedRadarPitch: 33
+            fixedRadarRoll: 1.8100545
+            fixedRadarYaw: 90
+          standard:
+            fov: 1
+            maxDistance: 4000
         configPort: 9990
+        horizontalFOV:
+          - [40.34842, -111.758634]
+          - [40.35756440138819, -111.75170550084829]
+          - [40.36335142874933, -111.73903556280834]
+          - [40.361690608137174, -111.72845943560293]
+          - [40.35583230750806, -111.72230467249909]
+          - [40.348413252365646, -111.7190479472016]
+          - [40.340996328882014, -111.72231266300895]
+          - [40.33514155380995, -111.72847131114133]
+          - [40.33348526490932, -111.73904423948602]
+          - [40.33927518531915, -111.75170737940414]
+        host: "172.16.0.47"
+        id: "X00330136"
+        mainAltSensor: true
+        mobile: false
         model: "R40"
         name: "Radar X00330136 Updated"
+        notes: null
+        password: "MEGgrq5iT21P2R2g"
+        port: 9991
+        range: 4000
+        simulateGpsLoss: false
+        simulated: false
+        status: "ON"
+        transmit: true
         useTrackElevationFilter: false
         username: "TEST"
-        password: "MEGgrq5iT21P2R2g"
+        version: "4.3.0"
+        verticalFOV:
+          - [0, 1350]
+          - [831.6467632710378, 5262.590402935222]
+          - [1815.9619989581875, 4914.0260967534705]
+          - [2676.522425435433, 4322.579301909576]
+          - [3354.6822717816963, 3528.556140060108]
+          - [3804.226065180614, 2586.06797749979]
+          - [3994.518139018295, 1559.3438249717753]
+          - [3912.5904029352228, 518.3532367289628]
 
   - path: /api/v2/sensors/radars/delete-multiple
     methods: [DELETE]
@@ -1357,9 +1480,10 @@ endpoints:
 #
 # 3. POST /api/v2/sensors/radars
 #    HTML section-id: tag/Radars/paths/~1api~1v2~1sensors~1radars/post ✓
-#    Body simplified from sdv5_Radar_addRadar.py (70 fields → 12 key fields).
-#    Full body in the example script is mostly config/position data; ablation
-#    will discover which fields are truly required by the API.
+#    Body matches sdv5_Radar_addRadar.py (all fields except server-generated
+#    _id, __v, created, modified, lastCalibrated, featureId). The full config
+#    sub-object (position, advanced, standard, etc.) is required for the radar
+#    simulator on this machine to accept the POST.
 #
 # 4. GET /api/v2/dronehunters/{host}/{port}/hunters
 #    HTML section-id: tag/DroneHunter/paths/~1api~1v2~1dronehunters~1{host}~1{port}~1hunters/get ✓

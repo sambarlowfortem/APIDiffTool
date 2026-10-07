@@ -8,7 +8,7 @@ from .registry import get_all_methods, get_listed_methods, resolve_deprecated, e
 from .schema_utils import infer_schema_from_body, merge_schemas, finalize_schema
 
 
-ALL_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+ALL_METHODS = ["POST", "PUT", "PATCH", "GET", "DELETE", "HEAD", "OPTIONS"]
 WRITABLE_METHODS = {"POST", "PUT", "PATCH"}
 
 
@@ -140,6 +140,48 @@ def _safe_json(resp):
         return None
 
 
+def _extract_id_from_response(body) -> str | None:
+    """Try to find an ID field in a response body for cleanup."""
+    if not isinstance(body, dict):
+        return None
+    for key in ("_id", "id", "featureId"):
+        val = body.get(key)
+        if val:
+            return str(val)
+        data = body.get("data")
+        if isinstance(data, dict):
+            val = data.get(key)
+            if val:
+                return str(val)
+    return None
+
+
+def _cleanup_matrix_post(client, base_url: str, ep: dict, ep_results: list[dict]):
+    """Best-effort DELETE of the resource created by the matrix POST probe."""
+    post_entry = next(
+        (e for e in ep_results if e.get("method") == "POST" and e.get("_raw_resp")),
+        None,
+    )
+    if not post_entry:
+        return
+    body = post_entry["_raw_resp"].get("body")
+    if not body:
+        return
+    resource_id = _extract_id_from_response(body)
+    if not resource_id:
+        return
+    path_template = ep["path"]
+    # Only attempt cleanup for collection endpoints (no path params) to avoid
+    # constructing nonsense URLs for action endpoints like /{id}/follow.
+    if "{" in path_template:
+        return
+    url = base_url.rstrip("/") + path_template.rstrip("/") + f"/{resource_id}"
+    try:
+        client.request("DELETE", url)
+    except Exception:
+        pass
+
+
 def run_probe_matrix(
     client,
     base_url: str,
@@ -165,6 +207,7 @@ def run_probe_matrix(
             resolved = {}
 
         skip = set(ep.get("skip_methods") or [])
+        ep_results = []
 
         for method in ALL_METHODS:
             if method in skip:
@@ -176,6 +219,11 @@ def run_probe_matrix(
             entry = probe_endpoint(
                 client, base_url, ep, method, resolved, not_found_sig, scenario
             )
-            results.append(entry)
+            ep_results.append(entry)
+
+        results.extend(ep_results)
+
+        # Best-effort cleanup of POST-created resource (after GET has already run)
+        _cleanup_matrix_post(client, base_url, ep, ep_results)
 
     return results

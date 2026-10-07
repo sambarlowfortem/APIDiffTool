@@ -84,6 +84,7 @@ class ParamResolver:
         self._registry = registry
         self._http = http_fn
         self._cache: dict[str, dict] = {}  # "METHOD /path" → response json
+        self._created_urls: list[str] = []  # DELETE URLs for end-of-scenario cleanup
 
     def resolve(self, endpoint: dict, base_url: str) -> dict[str, str] | None:
         """
@@ -138,6 +139,17 @@ class ParamResolver:
                 return None
             self._cache[key] = data
 
+            # Track POST-created resources for end-of-scenario cleanup
+            if method == "POST" and resp.status_code < 300:
+                resource_id = (
+                    _extract_field(data, "_id")
+                    or _extract_field(data, "id")
+                    or _extract_field(data, "featureId")
+                )
+                if resource_id:
+                    delete_url = url.rstrip("/") + f"/{resource_id}"
+                    self._created_urls.append(delete_url)
+
         return _extract_field(data, field)
 
     def _find_body(self, method: str, path: str) -> dict | None:
@@ -145,6 +157,15 @@ class ParamResolver:
             if ep["path"] == path:
                 return (ep.get("body") or {}).get(method)
         return None
+
+    def cleanup_created_resources(self):
+        """DELETE resources created by POST calls during param resolution."""
+        for url in self._created_urls:
+            try:
+                self._http("DELETE", url)
+            except Exception:
+                pass
+        self._created_urls.clear()
 
 
 def _extract_field(data, field: str):

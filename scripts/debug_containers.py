@@ -8,7 +8,6 @@ is available.
 
 Usage:
   python3 scripts/debug_containers.py
-  python3 scripts/debug_containers.py --scenario multiple_hunters
   python3 scripts/debug_containers.py --no-api       # skip API settle check
   python3 scripts/debug_containers.py --settle-wait 30
 """
@@ -80,8 +79,8 @@ def check_api_counts(base_url, email, password, scenario, settle_wait):
         auth.login()
         client = HttpClient(auth)
 
-        expected_hangar = 1 if scenario != "no_containers" else 0
-        expected_hunters = {"containers_present": 1, "multiple_hunters": 3}.get(scenario, 0)
+        expected_hangar = 1 if scenario == "containers_present" else 0
+        expected_hunters = 1 if scenario == "containers_present" else 0
 
         deadline = time.time() + settle_wait
         settled = False

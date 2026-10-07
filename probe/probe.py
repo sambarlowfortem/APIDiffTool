@@ -50,8 +50,8 @@ def parse_args():
     p.add_argument("--password", default=None, help="Login password")
     p.add_argument("--settle-wait", type=int, default=20, help="Seconds to wait after container state change (default: 20)")
     p.add_argument("--redact", default="", help="Comma-separated field names to mask in reports")
-    p.add_argument("--scenarios", default="no_containers,containers_present,multiple_hunters",
-                   help="Comma-separated scenarios to run (default: all three)")
+    p.add_argument("--scenarios", default="no_containers,containers_present",
+                   help="Comma-separated scenarios to run (default: no_containers,containers_present)")
     p.add_argument("--skip-containers", action="store_true",
                    help="Skip container management (run a single probe in current state)")
     p.add_argument("--delay", type=float, default=0.0,
@@ -169,6 +169,7 @@ def main():
                 client, base_url, registry, results, not_found_sig, scenario, args.verbose
             )
             all_endpoint_results.extend(results)
+            param_resolver.cleanup_created_resources()
         else:
             for scenario in scenarios_to_run:
                 if containers.client:
@@ -177,24 +178,26 @@ def main():
                         print(f"\n--- Container scenario: {scenario} (assuming already down, skipping stop/settle) ---")
                     else:
                         containers.apply_scenario(scenario, args.settle_wait)
-                        expected_hangar = 1
-                        expected_hunters = {"containers_present": 1, "multiple_hunters": 3}.get(scenario, 0)
+                        expected_hangar = 1 if scenario == "containers_present" else 0
+                        expected_hunters = 1 if scenario == "containers_present" else 0
                         containers.wait_for_settle(expected_hangar, expected_hunters, client, base_url, args.settle_wait)
                 else:
                     print(f"\n--- Scenario: {scenario} (Docker unavailable, skipping container changes) ---")
 
                 # Reset param resolver cache between scenarios (state may differ)
-                param_resolver = ParamResolver(registry, http_fn)
+                scenario_registry = _filter_containers_endpoints(registry) if scenario == "containers_present" else registry
+                param_resolver = ParamResolver(scenario_registry, http_fn)
 
                 print(f"\nProbing matrix for scenario: {scenario}")
                 results = run_probe_matrix(
-                    client, base_url, registry, param_resolver, not_found_sig, scenario, args.verbose
+                    client, base_url, scenario_registry, param_resolver, not_found_sig, scenario, args.verbose
                 )
                 print(f"\nRunning ablation for scenario: {scenario}")
                 results = run_ablation(
-                    client, base_url, registry, results, not_found_sig, scenario, args.verbose
+                    client, base_url, scenario_registry, results, not_found_sig, scenario, args.verbose
                 )
                 all_endpoint_results.extend(results)
+                param_resolver.cleanup_created_resources()
 
     finally:
         if not args.skip_containers and containers.client:
@@ -228,6 +231,7 @@ def main():
                     not_found_sig, "with_tracks", args.verbose,
                 )
                 all_endpoint_results.extend(track_results)
+                track_param_resolver.cleanup_created_resources()
             finally:
                 seeder.stop()
 
@@ -317,6 +321,16 @@ def _build_snapshot(
 def _strip_internal_fields(snapshot: dict) -> dict:
     clean = {k: v for k, v in snapshot.items() if not k.startswith("_")}
     return clean
+
+
+def _filter_containers_endpoints(registry: dict) -> dict:
+    """Return a registry copy containing only endpoints that vary by container state."""
+    filtered = {k: v for k, v in registry.items() if k != "endpoints"}
+    filtered["endpoints"] = [
+        ep for ep in registry.get("endpoints", [])
+        if ep["path"].startswith("/api/v2/dronehunters")
+    ]
+    return filtered
 
 
 def _filter_track_endpoints(registry: dict) -> dict:
