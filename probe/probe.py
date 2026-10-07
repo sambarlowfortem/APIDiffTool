@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,7 @@ from probe.ablation import run_ablation
 from probe.registry import load_registry, RegistryError, ParamResolver
 from probe.report import generate_report
 from probe.formats import FORMAT_DETECTORS_VERSION
+from probe.track_seeder import TrackSeeder
 
 
 def load_config(config_path: str = "config.json") -> dict:
@@ -55,6 +57,14 @@ def parse_args():
     p.add_argument("--delay", type=float, default=0.0,
                    help="Seconds to sleep between requests (default: 0). Use 0.1-0.5 to reduce server load.")
     p.add_argument("--verbose", action="store_true", default=True)
+    p.add_argument("--skip-track-seeding", action="store_true",
+                   help="Skip the track-seeded re-probe of reports/tracks endpoints")
+    p.add_argument("--track-settle-wait", type=int, default=5,
+                   help="Seconds to wait after starting UDP track sender before probing (default: 5)")
+    p.add_argument("--track-device-ip", default="172.16.0.250",
+                   help="IP to send UDP track packets to (default: 172.16.0.250)")
+    p.add_argument("--track-device-port", type=int, default=8300,
+                   help="UDP port for track packets (default: 8300)")
     return p.parse_args()
 
 
@@ -149,9 +159,9 @@ def main():
 
     try:
         if args.skip_containers:
-            # Run once with whatever state we're in
+            # Run once with whatever state we're in (assumes no containers)
             print("\n--- Single probe run (no container management) ---")
-            scenario = "containers_present"
+            scenario = "no_containers"
             results = run_probe_matrix(
                 client, base_url, registry, param_resolver, not_found_sig, scenario, args.verbose
             )
@@ -162,10 +172,14 @@ def main():
         else:
             for scenario in scenarios_to_run:
                 if containers.client:
-                    containers.apply_scenario(scenario, args.settle_wait)
-                    expected_hangar = 1 if scenario != "no_containers" else 0
-                    expected_hunters = {"no_containers": 0, "containers_present": 1, "multiple_hunters": 3}[scenario]
-                    containers.wait_for_settle(expected_hangar, expected_hunters, client, base_url, args.settle_wait)
+                    if scenario == "no_containers":
+                        # Assume no containers are connected at probe start — skip stop/settle wait.
+                        print(f"\n--- Container scenario: {scenario} (assuming already down, skipping stop/settle) ---")
+                    else:
+                        containers.apply_scenario(scenario, args.settle_wait)
+                        expected_hangar = 1
+                        expected_hunters = {"containers_present": 1, "multiple_hunters": 3}.get(scenario, 0)
+                        containers.wait_for_settle(expected_hangar, expected_hunters, client, base_url, args.settle_wait)
                 else:
                     print(f"\n--- Scenario: {scenario} (Docker unavailable, skipping container changes) ---")
 
@@ -186,6 +200,36 @@ def main():
         if not args.skip_containers and containers.client:
             print("\nRestoring container state...")
             containers.restore_initial_state()
+
+    # Track-seeded pass: inject live tracks so track endpoints return real schemas
+    if not args.skip_track_seeding:
+        print("\n--- Track-seeded probe pass (tracks + reports/tracks endpoints) ---")
+        track_registry = _filter_track_endpoints(registry)
+        if track_registry["endpoints"]:
+            seeder = TrackSeeder(
+                client, base_url,
+                device_ip=args.track_device_ip,
+                device_port=args.track_device_port,
+            )
+            try:
+                seeder.setup()
+                seeder.start_udp_sender()
+                print(f"  Waiting {args.track_settle_wait}s for tracks to appear...")
+                time.sleep(args.track_settle_wait)
+                track_param_resolver = ParamResolver(track_registry, http_fn)
+                print("\nProbing track endpoints (with live tracks)")
+                track_results = run_probe_matrix(
+                    client, base_url, track_registry, track_param_resolver,
+                    not_found_sig, "with_tracks", args.verbose,
+                )
+                print("\nRunning ablation for track endpoints")
+                track_results = run_ablation(
+                    client, base_url, track_registry, track_results,
+                    not_found_sig, "with_tracks", args.verbose,
+                )
+                all_endpoint_results.extend(track_results)
+            finally:
+                seeder.stop()
 
     auth.stop_auto_refresh()
     client.close()
@@ -273,6 +317,23 @@ def _build_snapshot(
 def _strip_internal_fields(snapshot: dict) -> dict:
     clean = {k: v for k, v in snapshot.items() if not k.startswith("_")}
     return clean
+
+
+def _filter_track_endpoints(registry: dict) -> dict:
+    """Return a registry copy containing only the live-tracks and reports/tracks endpoints.
+
+    Targeted paths:
+      /api/v2/tracks          — live track list and sub-paths
+      /api/v2/tracks/paths    — included by the prefix match above
+      /api/v2/reports/tracks  — historical track reports and sub-paths
+    """
+    filtered = {k: v for k, v in registry.items() if k != "endpoints"}
+    filtered["endpoints"] = [
+        ep for ep in registry.get("endpoints", [])
+        if ep["path"].startswith("/api/v2/tracks")
+        or ep["path"].startswith("/api/v2/reports/tracks")
+    ]
+    return filtered
 
 
 if __name__ == "__main__":

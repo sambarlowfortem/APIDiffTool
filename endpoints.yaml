@@ -1,4 +1,4 @@
-registry_version: 2
+registry_version: 3
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
 # Five spot-checked endpoints at the end of this file.
@@ -66,8 +66,7 @@ endpoints:
 
   - path: /api/v2/system/customer/distance-marker
     methods: [PUT]
-    body:
-      PUT: { "distanceMarker": [100] }
+    # distanceMarker write is broken server-side; omit body so probe tests endpoint presence without corrupting state
 
   - path: /api/v2/system/licensekey
     methods: [PUT]
