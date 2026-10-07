@@ -87,7 +87,7 @@ pre{background:#1e293b;color:#e2e8f0;padding:12px;border-radius:8px;font-size:.7
         <span class="method-badge {{ method_data.method }}">{{ method_data.method }}</span>
         {% if scenario.deprecated %}<span class="badge-deprecated">Deprecated {{ scenario.deprecated.in }}</span>{% endif %}
         <span class="status-badge">{{ scenario.status }}</span>
-        <span class="scenario-label">{{ scenario.scenario }}</span>
+        {% for s in scenario.scenarios %}<span class="scenario-label">{{ s }}</span>{% endfor %}
         {% for flag in scenario.registry_flags %}<span class="flag-badge">{{ flag }}</span>{% endfor %}
       </div>
 
@@ -143,7 +143,7 @@ pre{background:#1e293b;color:#e2e8f0;padding:12px;border-radius:8px;font-size:.7
         <div class="diff-cols">
           {% for scenario in method_data.scenarios %}
           <div>
-            <div class="section-label">{{ scenario.scenario }}</div>
+            <div class="section-label">{{ scenario.scenarios | join(' + ') }}</div>
             <p style="font-size:.82rem">Status: <strong>{{ scenario.status }}</strong></p>
           </div>
           {% endfor %}

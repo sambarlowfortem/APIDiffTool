@@ -34,6 +34,31 @@ def _redact_body(body, redact_fields: set):
     return body
 
 
+def _merge_identical_scenarios(scenarios_data: list) -> list:
+    """Collapse scenario entries that are structurally identical, combining their labels."""
+    merged = []
+    for entry in scenarios_data:
+        fingerprint = json.dumps({
+            "status": entry["status"],
+            "deprecated": entry["deprecated"],
+            "request_fields": entry["request_fields"],
+            "response_schema": entry["response_schema"],
+            "registry_flags": sorted(entry["registry_flags"]),
+            "example_response": entry["example_response"],
+        }, sort_keys=True)
+        for existing in merged:
+            if existing["_fp"] == fingerprint:
+                existing["scenarios"].append(entry["scenarios"][0])
+                break
+        else:
+            new_entry = dict(entry)
+            new_entry["_fp"] = fingerprint
+            merged.append(new_entry)
+    for entry in merged:
+        del entry["_fp"]
+    return merged
+
+
 def generate_report(
     snapshot: dict,
     registry: dict,
@@ -86,7 +111,7 @@ def generate_report(
                     reg_body = _redact_body(reg_body, redact_fields)
 
                 scenarios_data.append({
-                    "scenario": ep.get("scenario", ""),
+                    "scenarios": [ep.get("scenario", "")],
                     "status": ep.get("outcomes", {}).get("baseline", {}).get("status"),
                     "deprecated": ep.get("deprecated"),
                     "request_fields": ep.get("request_fields") or {},
@@ -95,6 +120,8 @@ def generate_report(
                     "registry_body": json.dumps(reg_body, indent=2) if reg_body else None,
                     "example_response": json.dumps(example_body, indent=2) if example_body else None,
                 })
+
+            scenarios_data = _merge_identical_scenarios(scenarios_data)
 
             methods_data.append({
                 "method": method,
@@ -132,6 +159,5 @@ def _has_scenario_diff(scenarios_data: list) -> bool:
     statuses = {s["status"] for s in scenarios_data}
     if len(statuses) > 1:
         return True
-    # Check if response schemas differ
     schemas = [json.dumps(s["response_schema"], sort_keys=True) for s in scenarios_data]
     return len(set(schemas)) > 1
