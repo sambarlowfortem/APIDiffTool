@@ -2,6 +2,17 @@
 
 from .formats import detect, merge_formats
 
+_TRACK_ID_PLACEHOLDER = "trackID"
+
+
+def _is_dynamic_id_key(k: str) -> bool:
+    """Return True if a dict key looks like a dynamic record ID rather than a field name.
+
+    Track IDs (e.g. RED1567890) are alphanumeric and contain both letters and digits.
+    Normal API field names (newPoints, trackFormat, type) contain only letters.
+    """
+    return k.isalnum() and any(c.isdigit() for c in k) and any(c.isalpha() for c in k)
+
 
 def infer_schema_from_body(body, prefix: str = "") -> dict:
     """Flatten a JSON body into a dot-notation field→{type,format} dict."""
@@ -12,6 +23,14 @@ def infer_schema_from_body(body, prefix: str = "") -> dict:
 
 def _flatten(value, prefix: str, result: dict):
     if isinstance(value, dict):
+        # When all keys look like dynamic record IDs (e.g. track IDs), normalise them
+        # to a single <trackID> placeholder so the schema is stable across runs.
+        if value and all(_is_dynamic_id_key(k) for k in value):
+            key = f"{prefix}.{_TRACK_ID_PLACEHOLDER}" if prefix else _TRACK_ID_PLACEHOLDER
+            first_val = next(iter(value.values()))
+            result[key] = {"type": "object"}
+            _flatten(first_val, key, result)
+            return
         for k, v in value.items():
             key = f"{prefix}.{k}" if prefix else k
             if isinstance(v, dict):
@@ -41,9 +60,7 @@ def _type_of(v) -> str:
         return "null"
     if isinstance(v, bool):
         return "boolean"
-    if isinstance(v, int):
-        return "integer"
-    if isinstance(v, float):
+    if isinstance(v, (int, float)):
         return "number"
     if isinstance(v, str):
         return "string"

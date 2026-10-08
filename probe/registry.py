@@ -106,16 +106,22 @@ class ParamResolver:
             elif "from" in spec:
                 key = spec["from"]   # e.g. "POST /api/v2/zones"
                 field = spec["field"]
-                value = self._resolve_from(key, field, base_url)
+                require_nonempty = spec.get("require_nonempty", False)
+                fallback = spec.get("fallback")
+                value = self._resolve_from(key, field, base_url, require_nonempty=require_nonempty)
                 if value is None:
-                    return None
-                resolved[param] = str(value)
+                    if fallback is not None:
+                        resolved[param] = str(fallback)
+                    else:
+                        return None
+                else:
+                    resolved[param] = str(value)
             else:
                 return None
 
         return resolved
 
-    def _resolve_from(self, key: str, field: str, base_url: str):
+    def _resolve_from(self, key: str, field: str, base_url: str, require_nonempty: bool = False):
         """Call the dependency endpoint and extract the field."""
         if key in self._cache:
             data = self._cache[key]
@@ -149,6 +155,17 @@ class ParamResolver:
                 if resource_id:
                     delete_url = url.rstrip("/") + f"/{resource_id}"
                     self._created_urls.append(delete_url)
+
+        if require_nonempty:
+            list_data = data
+            if isinstance(data, dict):
+                for wrapper in ("data", "result"):
+                    inner = data.get(wrapper)
+                    if isinstance(inner, list):
+                        list_data = inner
+                        break
+            if isinstance(list_data, list) and len(list_data) == 0:
+                return None
 
         return _extract_field(data, field)
 

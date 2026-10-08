@@ -150,9 +150,7 @@ def _infer_type(v) -> str:
         return "null"
     if isinstance(v, bool):
         return "boolean"
-    if isinstance(v, int):
-        return "integer"
-    if isinstance(v, float):
+    if isinstance(v, (int, float)):
         return "number"
     if isinstance(v, str):
         return "string"

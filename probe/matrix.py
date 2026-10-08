@@ -1,6 +1,7 @@
 """Probe matrix: send all 7 methods to every registered endpoint."""
 
 import re
+import time
 from typing import Any
 
 from .baseline import matches_not_found
@@ -182,6 +183,17 @@ def _cleanup_matrix_post(client, base_url: str, ep: dict, ep_results: list[dict]
         pass
 
 
+def _is_empty_response(entry: dict) -> bool:
+    """Return True if the entry's response body is None, [], or {}."""
+    raw = entry.get("_raw_resp", {})
+    body = raw.get("body")
+    if body is None:
+        return True
+    if isinstance(body, (list, dict)) and len(body) == 0:
+        return True
+    return False
+
+
 def run_probe_matrix(
     client,
     base_url: str,
@@ -190,6 +202,8 @@ def run_probe_matrix(
     not_found_sig: dict,
     scenario: str,
     verbose: bool = True,
+    retry_empty_get_max: int = 0,
+    retry_empty_get_delay: int = 3,
 ) -> list[dict]:
     """Run all 7 methods against every endpoint in the registry.
 
@@ -206,10 +220,29 @@ def run_probe_matrix(
         else:
             resolved = {}
 
+        # Ensure prerequisites exist before probing (e.g. a resource the body references)
+        for pre in ep.get("pre_create", []):
+            try:
+                pre_path = pre["path"]
+                if pre.get("use_resolved_params") and resolved:
+                    pre_path = substitute_params(pre_path, resolved)
+                pre_url = base_url.rstrip("/") + pre_path
+                pre_body = pre.get("body")
+                if pre_body:
+                    client.request(pre["method"], pre_url, json=pre_body)
+                else:
+                    client.request(pre["method"], pre_url)
+            except Exception:
+                pass
+
         skip = set(ep.get("skip_methods") or [])
+        probe_order = ep.get("probe_order") or ALL_METHODS
+        # Append any ALL_METHODS entries not already in probe_order so nothing is silently dropped
+        seen = set(probe_order)
+        effective_order = list(probe_order) + [m for m in ALL_METHODS if m not in seen]
         ep_results = []
 
-        for method in ALL_METHODS:
+        for method in effective_order:
             if method in skip:
                 if verbose:
                     print(f"  [{scenario}] {method:7s} {path_template}  [skipped — skip_methods]")
@@ -219,6 +252,25 @@ def run_probe_matrix(
             entry = probe_endpoint(
                 client, base_url, ep, method, resolved, not_found_sig, scenario
             )
+
+            if (
+                retry_empty_get_max > 0
+                and method == "GET"
+                and entry.get("exists")
+                and _is_empty_response(entry)
+            ):
+                for attempt in range(1, retry_empty_get_max + 1):
+                    if verbose:
+                        print(f"    [{scenario}] GET {path_template} — empty response, retrying in {retry_empty_get_delay}s (attempt {attempt}/{retry_empty_get_max})")
+                    time.sleep(retry_empty_get_delay)
+                    entry = probe_endpoint(
+                        client, base_url, ep, method, resolved, not_found_sig, scenario
+                    )
+                    if not _is_empty_response(entry):
+                        if verbose:
+                            print(f"    [{scenario}] GET {path_template} — got data on attempt {attempt}")
+                        break
+
             ep_results.append(entry)
 
         results.extend(ep_results)

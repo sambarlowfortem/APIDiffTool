@@ -55,6 +55,14 @@
                   "field": {
                     "type": "string",
                     "description": "Response field name (top-level) that holds the ID."
+                  },
+                  "require_nonempty": {
+                    "type": "boolean",
+                    "description": "If true, resolution fails when the response list is empty (before extracting the field)."
+                  },
+                  "fallback": {
+                    "type": "string",
+                    "description": "Literal value to use when resolution fails. Without this, a failure skips the probe entirely."
                   }
                 }
               },
@@ -70,6 +78,35 @@
                 }
               }
             ]
+          }
+        },
+        "pre_create": {
+          "type": "array",
+          "description": "HTTP calls to execute before probing this endpoint, to ensure prerequisites exist. 4xx errors (including 409 conflicts) are silently ignored.",
+          "items": {
+            "type": "object",
+            "required": ["path", "method"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^/",
+                "description": "Absolute path of the prerequisite resource endpoint."
+              },
+              "method": {
+                "type": "string",
+                "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+                "description": "HTTP method to use."
+              },
+              "body": {
+                "type": "object",
+                "description": "Request body for POST/PUT/PATCH calls."
+              },
+              "use_resolved_params": {
+                "type": "boolean",
+                "description": "If true, substitute the parent endpoint's resolved path params into this path before calling."
+              }
+            }
           }
         },
         "body": {
@@ -113,6 +150,15 @@
             "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
           },
           "description": "Methods the prober must NOT send to this endpoint (e.g. POST on shutdown/restart endpoints)."
+        },
+        "probe_order": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+          },
+          "description": "Override the default method probe order for this endpoint. Methods absent from this list and not in skip_methods are appended at the end."
         }
       }
     }

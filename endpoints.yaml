@@ -1,4 +1,4 @@
-registry_version: 5
+registry_version: 9
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
 # Cross-checked against 5.0.9, 5.1.0, 5.2.0 docs (added time-servers write endpoints + radars/relocate)
@@ -769,9 +769,15 @@ endpoints:
   - path: /api/v2/dronehunters/{id}/land-zones/assign
     methods: [POST]
     params:
-      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id", require_nonempty: true, fallback: "999" }
     body:
       POST: { "name": "probe-land-zone" }
+    pre_create:
+      - path: /api/v2/dronehunters/land-zones/probe-land-zone
+        method: DELETE
+      - path: /api/v2/dronehunters/land-zones
+        method: POST
+        body: { "name": "probe-land-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
 
   - path: /api/v2/dronehunters/{id}/land-zones/unassign
     methods: [POST]
@@ -781,9 +787,19 @@ endpoints:
   - path: /api/v2/dronehunters/{id}/land-zones/override-alt
     methods: [POST]
     params:
-      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id", require_nonempty: true, fallback: "999" }
     body:
       POST: { "alt": 1350.0 }
+    pre_create:
+      - path: /api/v2/dronehunters/land-zones/probe-land-zone
+        method: DELETE
+      - path: /api/v2/dronehunters/land-zones
+        method: POST
+        body: { "name": "probe-land-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+      - path: /api/v2/dronehunters/{id}/land-zones/assign
+        method: POST
+        body: { "name": "probe-land-zone" }
+        use_resolved_params: true
 
   # ─── DroneHunter - Drop Zones ───────────────────────────────────────────────
 
@@ -802,9 +818,15 @@ endpoints:
   - path: /api/v2/dronehunters/{id}/drop-zones/assign
     methods: [POST]
     params:
-      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id", require_nonempty: true, fallback: "999" }
     body:
       POST: { "name": "probe-drop-zone" }
+    pre_create:
+      - path: /api/v2/dronehunters/drop-zones/probe-drop-zone
+        method: DELETE
+      - path: /api/v2/dronehunters/drop-zones
+        method: POST
+        body: { "name": "probe-drop-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
 
   - path: /api/v2/dronehunters/{id}/drop-zones/unassign
     methods: [POST]
@@ -814,9 +836,19 @@ endpoints:
   - path: /api/v2/dronehunters/{id}/drop-zones/override-alt
     methods: [POST]
     params:
-      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id", require_nonempty: true, fallback: "999" }
     body:
       POST: { "alt": 1350.0 }
+    pre_create:
+      - path: /api/v2/dronehunters/drop-zones/probe-drop-zone
+        method: DELETE
+      - path: /api/v2/dronehunters/drop-zones
+        method: POST
+        body: { "name": "probe-drop-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+      - path: /api/v2/dronehunters/{id}/drop-zones/assign
+        method: POST
+        body: { "name": "probe-drop-zone" }
+        use_resolved_params: true
 
   # ─── DroneHunter - Ground Control ───────────────────────────────────────────
 
@@ -1116,6 +1148,7 @@ endpoints:
 
   - path: /datastream/config
     methods: [GET, POST, PUT, DELETE]
+    probe_order: [DELETE, GET, HEAD, OPTIONS, POST, PUT, PATCH]
     body:
       POST:
         host: "172.16.0.45:3151"

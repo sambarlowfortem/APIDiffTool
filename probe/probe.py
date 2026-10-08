@@ -224,6 +224,7 @@ def main():
                 track_results = run_probe_matrix(
                     client, base_url, track_registry, track_param_resolver,
                     not_found_sig, "with_tracks", args.verbose,
+                    retry_empty_get_max=20, retry_empty_get_delay=3,
                 )
                 print("\nRunning ablation for track endpoints")
                 track_results = run_ablation(
@@ -334,19 +335,31 @@ def _filter_containers_endpoints(registry: dict) -> dict:
 
 
 def _filter_track_endpoints(registry: dict) -> dict:
-    """Return a registry copy containing only the live-tracks and reports/tracks endpoints.
+    """Return a registry copy for the with_tracks pass.
 
-    Targeted paths:
+    Includes:
+      /datastream/config      — read-only (GET/HEAD/OPTIONS only); seeder has set up
+                                exactly one known config, so we only read it here
       /api/v2/tracks          — live track list and sub-paths
       /api/v2/tracks/paths    — included by the prefix match above
       /api/v2/reports/tracks  — historical track reports and sub-paths
     """
     filtered = {k: v for k, v in registry.items() if k != "endpoints"}
-    filtered["endpoints"] = [
-        ep for ep in registry.get("endpoints", [])
-        if ep["path"].startswith("/api/v2/tracks")
-        or ep["path"].startswith("/api/v2/reports/tracks")
-    ]
+
+    endpoints = []
+    for ep in registry.get("endpoints", []):
+        if ep["path"] == "/datastream/config":
+            # Read-only probe: skip all write methods so the seeder's single known
+            # config is not disturbed before or during the GET probe.
+            ep_copy = dict(ep)
+            existing_skip = set(ep_copy.get("skip_methods") or [])
+            ep_copy["skip_methods"] = sorted(existing_skip | {"POST", "PUT", "PATCH", "DELETE"})
+            endpoints.append(ep_copy)
+        elif (ep["path"].startswith("/api/v2/tracks")
+              or ep["path"].startswith("/api/v2/reports/tracks")):
+            endpoints.append(ep)
+
+    filtered["endpoints"] = endpoints
     return filtered
 
 
