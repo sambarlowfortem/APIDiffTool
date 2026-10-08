@@ -1,6 +1,7 @@
-registry_version: 4
+registry_version: 5
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
+# Cross-checked against 5.0.9, 5.1.0, 5.2.0 docs (added time-servers write endpoints + radars/relocate)
 # Five spot-checked endpoints at the end of this file.
 #
 # Param resolution conventions:
@@ -23,6 +24,7 @@ registry_version: 4
 #   name (drop-zone)  → from POST /api/v2/dronehunters/drop-zones, field name
 #   name (defend-pt)  → from POST /api/v2/dronehunters/defend-points, field name
 #   backup            → from GET /api/v2/app/backups, field name
+#   host (time-srv)   → from POST /api/v2/system/time-servers, field host
 #   host/port (radar) → from POST /api/v2/sensors/radars, fields host / port
 #   host/port (DH)    → from GET /api/v2/dronehunters, fields host / port
 
@@ -275,10 +277,19 @@ endpoints:
   # ─── Time Servers ────────────────────────────────────────────────────────────
 
   - path: /api/v2/system/time-servers
-    methods: [GET]
+    methods: [GET, POST]
+    body:
+      POST: { "host": "pool.ntp.org", "enabled": true }
 
   - path: /api/v2/system/time-servers/sync
     methods: [GET]
+
+  - path: /api/v2/system/time-servers/{host}
+    methods: [PUT, DELETE]
+    params:
+      host: { from: "POST /api/v2/system/time-servers", field: "host" }
+    body:
+      PUT: { "enabled": true }
 
   # ─── Users ──────────────────────────────────────────────────────────────────
 
@@ -1266,6 +1277,11 @@ endpoints:
         configPort: 9990
         model: "R40"
         name: "Radar X00330136"
+
+  - path: /api/v2/sensors/radars/relocate
+    methods: [PUT]
+    removed_from_docs: "5.1.0"
+    # Body is an array of Radar objects — ablation loop skips non-object bodies
 
   - path: /api/v2/sensors/radars/bulk-edit
     methods: [PUT]

@@ -539,6 +539,11 @@ function runDiff() {
   const idxB = buildIndex(snapB);
   const allKeys = new Set([...Object.keys(idxA), ...Object.keys(idxB)]);
 
+  // path+method sets — used to avoid flagging "added/removed" when an endpoint
+  // simply appears in a new scenario that wasn't probed in the other run
+  const pmA = new Set((snapA.endpoints || []).filter(e => e.exists !== false).map(e => `${e.path}||${e.method}`));
+  const pmB = new Set((snapB.endpoints || []).filter(e => e.exists !== false).map(e => `${e.path}||${e.method}`));
+
   // Collect all scenarios
   const scenariosA = new Set((snapA.endpoints || []).map(e => e.scenario));
   const scenariosB = new Set((snapB.endpoints || []).map(e => e.scenario));
@@ -584,8 +589,13 @@ function runDiff() {
     let isAssumed = false;
     let assumedNote = null;
 
-    // Existence change
-    if (existsA !== existsB) {
+    // Existence change — only flag added/removed if the endpoint is genuinely
+    // absent from the other run entirely (not just missing in this one scenario).
+    // When the path+method works in at least one scenario in both snapshots, a
+    // per-scenario exists change is scenario-level behaviour, not a new endpoint.
+    const pm = `${path}||${method}`;
+    const knownInBoth = pmA.has(pm) && pmB.has(pm);
+    if (existsA !== existsB && !knownInBoth) {
       const chg = {
         category: existsB ? 'added' : 'removed',
         label: existsB ? 'Endpoint added' : 'Endpoint removed',
@@ -679,15 +689,20 @@ function runDiff() {
     // Deprecation — from newer registry snap
     const deprecatedEntry = (newerSnap.endpoints || []).find(e => e.path === path && e.method === method && e.scenario === scenario);
     const depInfo = (epA && epA.deprecated) || (epB && epB.deprecated) || (deprecatedEntry && deprecatedEntry.deprecated) || null;
-    if (depInfo) {
+    const depA = (epA && epA.deprecated) || null;
+    const depB = (epB && epB.deprecated) || null;
+    const depChanged = !!depA !== !!depB || (depA && depB && (depA.in !== depB.in || depA.stopped_working_in !== depB.stopped_working_in));
+    if (depInfo && depChanged) {
       changes.push({ category: 'deprecation', label: `Deprecated since ${depInfo.in || '?'}${depInfo.stopped_working_in ? ` (stopped working in ${depInfo.stopped_working_in})` : ''}`, breaking: false });
     }
 
     // Registry flags
     const flagsA = (epA && epA.registry_flags) ? epA.registry_flags : [];
     const flagsB = (epB && epB.registry_flags) ? epB.registry_flags : [];
-    const allFlags = [...new Set([...flagsA, ...flagsB])];
-    if (allFlags.length) {
+    const setA = new Set(flagsA);
+    const setB = new Set(flagsB);
+    if (flagsA.some(f => !setB.has(f)) || flagsB.some(f => !setA.has(f))) {
+      const allFlags = [...new Set([...flagsA, ...flagsB])];
       changes.push({ category: 'registry_flags', label: `Registry flags: ${allFlags.join(', ')}`, breaking: false });
     }
 
