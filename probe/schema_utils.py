@@ -4,6 +4,10 @@ from .formats import detect, merge_formats
 
 _TRACK_ID_PLACEHOLDER = "trackID"
 
+# Array fields whose item structure is transient / timing-dependent.
+# Recorded as arrays but not recursed into so their presence is stable across runs.
+_OPAQUE_ARRAY_FIELDS = frozenset({"newPoints"})
+
 
 def _is_dynamic_id_key(k: str) -> bool:
     """Return True if a dict key looks like a dynamic record ID rather than a field name.
@@ -38,7 +42,7 @@ def _flatten(value, prefix: str, result: dict):
                 _flatten(v, key, result)
             elif isinstance(v, list):
                 result[key] = {"type": "array"}
-                if v:
+                if v and k not in _OPAQUE_ARRAY_FIELDS:
                     item = v[0]
                     arr_key = f"{key}[]"
                     if isinstance(item, dict):
