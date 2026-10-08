@@ -219,6 +219,8 @@ def main():
                 seeder.start_udp_sender()
                 print(f"  Waiting {args.track_settle_wait}s for tracks to appear...")
                 time.sleep(args.track_settle_wait)
+                if not _wait_for_tracks(client, base_url):
+                    print("  WARNING: No track data confirmed after timeout — with_tracks probe may capture empty schemas")
                 track_param_resolver = ParamResolver(track_registry, http_fn)
                 print("\nProbing track endpoints (with live tracks)")
                 track_results = run_probe_matrix(
@@ -262,6 +264,24 @@ def main():
     print(f"Report written  : {report_path}")
 
     print("\nDone.")
+
+
+def _wait_for_tracks(client, base_url: str, max_wait: int = 60, poll_interval: int = 3) -> bool:
+    """Poll GET /api/v2/tracks until the data field is non-empty or timeout. Returns True if tracks confirmed."""
+    url = f"{base_url}/api/v2/tracks"
+    elapsed = 0
+    while elapsed < max_wait:
+        try:
+            resp = client.request("GET", url)
+            body = resp.json() if hasattr(resp, "json") else {}
+            if isinstance(body, dict) and isinstance(body.get("data"), dict) and body["data"]:
+                print(f"  Track data confirmed after {elapsed}s")
+                return True
+        except Exception:
+            pass
+        time.sleep(poll_interval)
+        elapsed += poll_interval
+    return False
 
 
 def _sig_status(sig: dict) -> str:

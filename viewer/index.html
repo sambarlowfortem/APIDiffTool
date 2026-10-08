@@ -682,9 +682,12 @@ function runDiff() {
             changes.push({ category: 'type_change', label: `Response field type: ${rk}`, valA: `${raType || '—'}`, valB: `${rbType || '—'}`, breaking: true });
             isBreaking = true;
           } else if (ra.format !== rb.format) {
-            const fmtNote = (snapA.format_detectors_version !== snapB.format_detectors_version)
-              ? ' ⚠ detector versions differ' : '';
-            changes.push({ category: 'format_change', label: `Response field format: ${rk}`, valA: ra.format || '—', valB: rb.format || '—', breaking: false, note: fmtNote });
+            const numericFormats = new Set(['integer', 'decimal']);
+            if (!(numericFormats.has(ra.format) && numericFormats.has(rb.format))) {
+              const fmtNote = (snapA.format_detectors_version !== snapB.format_detectors_version)
+                ? ' ⚠ detector versions differ' : '';
+              changes.push({ category: 'format_change', label: `Response field format: ${rk}`, valA: ra.format || '—', valB: rb.format || '—', breaking: false, note: fmtNote });
+            }
           }
         }
       }

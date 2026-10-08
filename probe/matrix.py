@@ -191,6 +191,12 @@ def _is_empty_response(entry: dict) -> bool:
         return True
     if isinstance(body, (list, dict)) and len(body) == 0:
         return True
+    # /api/v2/tracks returns {"data": {}, "err": "", "msg": ""} when no tracks are active
+    if (entry.get("path") == "/api/v2/tracks"
+            and isinstance(body, dict)
+            and isinstance(body.get("data"), (dict, list))
+            and len(body["data"]) == 0):
+        return True
     return False
 
 
