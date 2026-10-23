@@ -108,6 +108,9 @@ class ParamResolver:
                 field = spec["field"]
                 require_nonempty = spec.get("require_nonempty", False)
                 fallback = spec.get("fallback")
+                depends_on = spec.get("depends_on")
+                if depends_on and depends_on not in self._cache:
+                    self._resolve_from(depends_on, "_id", base_url)
                 value = self._resolve_from(key, field, base_url, require_nonempty=require_nonempty)
                 if value is None:
                     if fallback is not None:
@@ -153,7 +156,16 @@ class ParamResolver:
                     or _extract_field(data, "featureId")
                 )
                 if resource_id:
-                    delete_url = url.rstrip("/") + f"/{resource_id}"
+                    # Use cleanup_path_prefix if specified (e.g. RF sensors deleted via radar endpoint)
+                    cleanup_prefix = None
+                    for ep in self._registry.get("endpoints", []):
+                        if ep["path"] == path:
+                            cleanup_prefix = ep.get("cleanup_path_prefix")
+                            break
+                    if cleanup_prefix:
+                        delete_url = base_url.rstrip("/") + cleanup_prefix.rstrip("/") + f"/{resource_id}"
+                    else:
+                        delete_url = url.rstrip("/") + f"/{resource_id}"
                     self._created_urls.append(delete_url)
 
         if require_nonempty:

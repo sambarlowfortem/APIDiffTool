@@ -127,18 +127,17 @@ def _try_cleanup(client, base_url: str, create_method: str, resp, ep: dict, body
     if not body:
         return
 
-    resource_id = _extract_id_from_response(body)
+    resource_id = _extract_id_from_response(body, ep.get("cleanup_id_field"))
     if not resource_id:
         return
 
     path_template = ep["path"]
-    # Look for a sibling endpoint with {id} that supports DELETE
-    from .registry import get_listed_methods
-    from .matrix import substitute_params
-    id_path = path_template.rstrip("/") + "/{id}"
-    # Also check registry for a matching DELETE endpoint
-    # For now, just attempt DELETE on path/{id}
-    url = base_url.rstrip("/") + path_template.rstrip("/") + f"/{resource_id}"
+    # Use cleanup_path_prefix if specified (e.g. RF sensors deleted via radar endpoint)
+    cleanup_prefix = ep.get("cleanup_path_prefix")
+    if cleanup_prefix:
+        url = base_url.rstrip("/") + cleanup_prefix.rstrip("/") + f"/{resource_id}"
+    else:
+        url = base_url.rstrip("/") + path_template.rstrip("/") + f"/{resource_id}"
     try:
         client.request("DELETE", url)
     except Exception:

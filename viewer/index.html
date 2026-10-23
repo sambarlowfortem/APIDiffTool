@@ -683,7 +683,8 @@ function runDiff() {
             isBreaking = true;
           } else if (ra.format !== rb.format) {
             const numericFormats = new Set(['integer', 'decimal']);
-            if (!(numericFormats.has(ra.format) && numericFormats.has(rb.format))) {
+            const bothShape = (ra.format || '').startsWith('shape:') && (rb.format || '').startsWith('shape:');
+            if (!bothShape && !(numericFormats.has(ra.format) && numericFormats.has(rb.format))) {
               const fmtNote = (snapA.format_detectors_version !== snapB.format_detectors_version)
                 ? ' ⚠ detector versions differ' : '';
               changes.push({ category: 'format_change', label: `Response field format: ${rk}`, valA: ra.format || '—', valB: rb.format || '—', breaking: false, note: fmtNote });
@@ -830,7 +831,7 @@ function renderRow(r) {
   const badges = [
     `<span class="scenario-badge">${esc(r.scenario)}</span>`,
     r.depInfo ? `<span class="dep-badge">DEPRECATED</span>` : '',
-    (r.flagsA.length || r.flagsB.length) ? `<span class="flag-badge">⚑ flags</span>` : '',
+    (r.changes.some(c => c.category === 'registry_flags')) ? `<span class="flag-badge">⚑ flags</span>` : '',
     r.isAssumed ? `<span class="assumed-badge">assumed</span>` : '',
   ].filter(Boolean).join(' ');
 

@@ -22,7 +22,10 @@ class HttpClient:
             kwargs["headers"]["Authorization"] = f"Bearer {self._auth.get_token()}"
             try:
                 resp = self._client.request(method, url, **kwargs)
-                if resp.status_code == 429:
+                if resp.status_code == 401 and attempt < max_retries:
+                    self._auth.refresh()
+                    continue
+                elif resp.status_code == 429:
                     wait = int(resp.headers.get("Retry-After", "5"))
                     if attempt < max_retries:
                         time.sleep(wait)

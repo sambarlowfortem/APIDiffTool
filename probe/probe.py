@@ -28,7 +28,7 @@ from probe.ablation import run_ablation
 from probe.registry import load_registry, RegistryError, ParamResolver
 from probe.report import generate_report
 from probe.formats import FORMAT_DETECTORS_VERSION
-from probe.track_seeder import TrackSeeder
+from probe.track_seeder import TrackSeeder, TrackSeederError
 
 
 def load_config(config_path: str = "config.json") -> dict:
@@ -51,7 +51,10 @@ def parse_args():
     p.add_argument("--settle-wait", type=int, default=20, help="Seconds to wait after container state change (default: 20)")
     p.add_argument("--redact", default="", help="Comma-separated field names to mask in reports")
     p.add_argument("--scenarios", default="no_containers,containers_present",
-                   help="Comma-separated scenarios to run (default: no_containers,containers_present)")
+                   help="Comma-separated scenarios to run. Container scenarios: "
+                        "no_containers, containers_present, multiple_hunters. "
+                        "Use 'with_tracks' to run (or exclusively run) the track-seeded pass. "
+                        "Example: --scenarios with_tracks  (default: no_containers,containers_present)")
     p.add_argument("--skip-containers", action="store_true",
                    help="Skip container management (run a single probe in current state)")
     p.add_argument("--delay", type=float, default=0.0,
@@ -65,6 +68,8 @@ def parse_args():
                    help="IP to send UDP track packets to (default: 172.16.0.250)")
     p.add_argument("--track-device-port", type=int, default=8300,
                    help="UDP port for track packets (default: 8300)")
+    p.add_argument("--track-wait-timeout", type=int, default=60,
+                   help="Seconds to wait for live tracks to appear before aborting (default: 60)")
     return p.parse_args()
 
 
@@ -95,10 +100,14 @@ def main():
     scenarios_to_run = [s.strip() for s in args.scenarios.split(",") if s.strip()]
 
     # Validate scenario names
+    valid_scenarios = set(SCENARIOS) | {"with_tracks"}
     for s in scenarios_to_run:
-        if s not in SCENARIOS:
-            print(f"ERROR: Unknown scenario '{s}'. Valid: {', '.join(SCENARIOS)}")
+        if s not in valid_scenarios:
+            print(f"ERROR: Unknown scenario '{s}'. Valid: {', '.join(sorted(valid_scenarios))}")
             sys.exit(1)
+
+    container_scenarios = [s for s in scenarios_to_run if s != "with_tracks"]
+    run_track_pass = "with_tracks" in scenarios_to_run or not args.skip_track_seeding
 
     # Build run_id and output paths
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -158,20 +167,25 @@ def main():
     all_endpoint_results = []
 
     try:
-        if args.skip_containers:
+        if not container_scenarios:
+            print("\n--- No container scenarios requested (skipping to track-seeded pass) ---")
+        elif args.skip_containers:
             # Run once with whatever state we're in (assumes no containers)
             print("\n--- Single probe run (no container management) ---")
             scenario = "no_containers"
+            # Exclude with_tracks_only endpoints from this pass
+            single_registry = _exclude_with_tracks_only(registry)
+            param_resolver = ParamResolver(single_registry, http_fn)
             results = run_probe_matrix(
-                client, base_url, registry, param_resolver, not_found_sig, scenario, args.verbose
+                client, base_url, single_registry, param_resolver, not_found_sig, scenario, args.verbose
             )
             results = run_ablation(
-                client, base_url, registry, results, not_found_sig, scenario, args.verbose
+                client, base_url, single_registry, results, not_found_sig, scenario, args.verbose
             )
             all_endpoint_results.extend(results)
             param_resolver.cleanup_created_resources()
         else:
-            for scenario in scenarios_to_run:
+            for scenario in container_scenarios:
                 if containers.client:
                     if scenario == "no_containers":
                         # Assume no containers are connected at probe start — skip stop/settle wait.
@@ -186,6 +200,8 @@ def main():
 
                 # Reset param resolver cache between scenarios (state may differ)
                 scenario_registry = _filter_containers_endpoints(registry) if scenario == "containers_present" else registry
+                # Exclude with_tracks_only endpoints from all non-track scenario passes
+                scenario_registry = _exclude_with_tracks_only(scenario_registry)
                 param_resolver = ParamResolver(scenario_registry, http_fn)
 
                 print(f"\nProbing matrix for scenario: {scenario}")
@@ -200,41 +216,71 @@ def main():
                 param_resolver.cleanup_created_resources()
 
     finally:
-        if not args.skip_containers and containers.client:
+        if not args.skip_containers and containers.client and container_scenarios:
             print("\nRestoring container state...")
             containers.restore_initial_state()
 
     # Track-seeded pass: inject live tracks so track endpoints return real schemas
-    if not args.skip_track_seeding:
+    if run_track_pass:
         print("\n--- Track-seeded probe pass (tracks + reports/tracks endpoints) ---")
         track_registry = _filter_track_endpoints(registry)
         if track_registry["endpoints"]:
+            # Fresh client — avoids httpx cookie accumulation from the preceding probe run
+            # causing 401s on track and datastream endpoints.
+            wt_client = HttpClient(auth, delay=args.delay)
+            def wt_http_fn(method, url, **kwargs):
+                return wt_client.request(method, url, **kwargs)
+
             seeder = TrackSeeder(
-                client, base_url,
+                wt_client, base_url,
                 device_ip=args.track_device_ip,
                 device_port=args.track_device_port,
             )
             try:
-                seeder.setup()
+                try:
+                    seeder.setup()
+                except TrackSeederError as e:
+                    auth.stop_auto_refresh()
+                    client.close()
+                    wt_client.close()
+                    print(f"\n{'='*60}")
+                    print(f"FATAL: Track seeder setup failed: {e}")
+                    print("The with_tracks probe pass cannot run.")
+                    print("Fix the datastream config issue and re-run the probe.")
+                    print(f"{'='*60}")
+                    sys.exit(1)
+
                 seeder.start_udp_sender()
-                print(f"  Waiting {args.track_settle_wait}s for tracks to appear...")
-                time.sleep(args.track_settle_wait)
-                track_param_resolver = ParamResolver(track_registry, http_fn)
+                print(f"  Waiting up to {args.track_wait_timeout}s for live tracks to appear...")
+                if not seeder.wait_for_tracks(max_wait=args.track_wait_timeout):
+                    auth.stop_auto_refresh()
+                    client.close()
+                    wt_client.close()
+                    print(f"\n{'='*60}")
+                    print("FATAL: No live tracks received from GET /api/v2/tracks")
+                    print(f"       within {args.track_wait_timeout}s.")
+                    print("This run is not useable — track endpoints would record empty schemas.")
+                    print("Check the UDP track source and datastream config, then re-run.")
+                    print(f"{'='*60}")
+                    sys.exit(1)
+
+                track_param_resolver = ParamResolver(track_registry, wt_http_fn)
                 print("\nProbing track endpoints (with live tracks)")
                 track_results = run_probe_matrix(
-                    client, base_url, track_registry, track_param_resolver,
+                    wt_client, base_url, track_registry, track_param_resolver,
                     not_found_sig, "with_tracks", args.verbose,
-                    retry_empty_get_max=20, retry_empty_get_delay=3,
+                    retry_empty_get_max=20, retry_empty_get_delay=0,
                 )
                 print("\nRunning ablation for track endpoints")
                 track_results = run_ablation(
-                    client, base_url, track_registry, track_results,
+                    wt_client, base_url, track_registry, track_results,
                     not_found_sig, "with_tracks", args.verbose,
                 )
                 all_endpoint_results.extend(track_results)
                 track_param_resolver.cleanup_created_resources()
             finally:
                 seeder.stop()
+                wt_client.close()
 
     auth.stop_auto_refresh()
     client.close()
@@ -338,11 +384,10 @@ def _filter_track_endpoints(registry: dict) -> dict:
     """Return a registry copy for the with_tracks pass.
 
     Includes:
-      /datastream/config      — read-only (GET/HEAD/OPTIONS only); seeder has set up
-                                exactly one known config, so we only read it here
-      /api/v2/tracks          — live track list and sub-paths
-      /api/v2/tracks/paths    — included by the prefix match above
-      /api/v2/reports/tracks  — historical track reports and sub-paths
+      /datastream/config                — read-only; seeder has set up exactly one config
+      /api/v2/tracks                    — live track list and sub-paths
+      /api/v2/reports/tracks            — historical track reports and sub-paths
+      with_tracks_only: true endpoints  — sensor endpoints that need live tracks (cameras, etc.)
     """
     filtered = {k: v for k, v in registry.items() if k != "endpoints"}
 
@@ -356,10 +401,26 @@ def _filter_track_endpoints(registry: dict) -> dict:
             ep_copy["skip_methods"] = sorted(existing_skip | {"POST", "PUT", "PATCH", "DELETE"})
             endpoints.append(ep_copy)
         elif (ep["path"].startswith("/api/v2/tracks")
-              or ep["path"].startswith("/api/v2/reports/tracks")):
+              or ep["path"].startswith("/api/v2/reports/tracks")
+              or ep.get("with_tracks_only")):
             endpoints.append(ep)
 
     filtered["endpoints"] = endpoints
+    return filtered
+
+
+def _exclude_with_tracks_only(registry: dict) -> dict:
+    """Return a registry copy with with_tracks_only endpoints removed.
+
+    These endpoints are probed exclusively in the with_tracks pass where live
+    tracks are injected, so they must not run in normal no_containers /
+    containers_present scenarios.
+    """
+    filtered = {k: v for k, v in registry.items() if k != "endpoints"}
+    filtered["endpoints"] = [
+        ep for ep in registry.get("endpoints", [])
+        if not ep.get("with_tracks_only")
+    ]
     return filtered
 
 

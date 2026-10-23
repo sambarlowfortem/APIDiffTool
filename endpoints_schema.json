@@ -63,6 +63,11 @@
                   "fallback": {
                     "type": "string",
                     "description": "Literal value to use when resolution fails. Without this, a failure skips the probe entirely."
+                  },
+                  "depends_on": {
+                    "type": "string",
+                    "pattern": "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) /.+",
+                    "description": "An endpoint to call first (e.g. a POST to create a resource) before resolving the main 'from' endpoint."
                   }
                 }
               },
@@ -159,6 +164,19 @@
             "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
           },
           "description": "Override the default method probe order for this endpoint. Methods absent from this list and not in skip_methods are appended at the end."
+        },
+        "with_tracks_only": {
+          "type": "boolean",
+          "description": "If true, this endpoint is excluded from all normal scenario runs and only probed in the with_tracks pass (when live tracks are being injected)."
+        },
+        "cleanup_path_prefix": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "Override the path prefix used for DELETE cleanup after a POST creates a resource. E.g. RF sensors must be deleted via /api/v2/sensors/radars/{id} not /api/v2/sensors/rfsensors/{id}."
+        },
+        "cleanup_id_field": {
+          "type": "string",
+          "description": "Response field to use as the resource ID when constructing the cleanup DELETE URL. Defaults to _id/id/featureId. Use when the resource's identifier is in a differently named field (e.g. 'name' for defend-points and land-zones)."
         }
       }
     }

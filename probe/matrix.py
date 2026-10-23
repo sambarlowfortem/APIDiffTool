@@ -1,5 +1,6 @@
 """Probe matrix: send all 7 methods to every registered endpoint."""
 
+import random
 import re
 import time
 from typing import Any
@@ -82,12 +83,17 @@ def probe_endpoint(
     exists = not matches_not_found(resp, not_found_sig)
     outcomes = {"baseline": {"status": resp.status_code}}
 
+    # Parse body once; sanitize newPoints on /api/v2/tracks so transient track
+    # data doesn't produce schema diffs between runs.
+    raw_body = _safe_json(resp)
+    if path_template == "/api/v2/tracks" and scenario == "with_tracks":
+        raw_body = _sanitize_track_newpoints(raw_body)
+
     # Infer response schema
     response_schema = None
     if exists and resp.status_code < 300:
         try:
-            body_data = resp.json()
-            schema = infer_schema_from_body(body_data)
+            schema = infer_schema_from_body(raw_body)
             if schema:
                 # Mark all fields as required initially (single sample)
                 for info in schema.values():
@@ -127,7 +133,7 @@ def probe_endpoint(
     # Store raw response for ablation and report
     entry["_raw_resp"] = {
         "status": resp.status_code,
-        "body": _safe_json(resp),
+        "body": raw_body,
         "url": url,
     }
 
@@ -141,11 +147,12 @@ def _safe_json(resp):
         return None
 
 
-def _extract_id_from_response(body) -> str | None:
+def _extract_id_from_response(body, extra_id_field: str | None = None) -> str | None:
     """Try to find an ID field in a response body for cleanup."""
     if not isinstance(body, dict):
         return None
-    for key in ("_id", "id", "featureId"):
+    candidates = ([extra_id_field] if extra_id_field else []) + ["_id", "id", "featureId"]
+    for key in candidates:
         val = body.get(key)
         if val:
             return str(val)
@@ -168,7 +175,7 @@ def _cleanup_matrix_post(client, base_url: str, ep: dict, ep_results: list[dict]
     body = post_entry["_raw_resp"].get("body")
     if not body:
         return
-    resource_id = _extract_id_from_response(body)
+    resource_id = _extract_id_from_response(body, ep.get("cleanup_id_field"))
     if not resource_id:
         return
     path_template = ep["path"]
@@ -183,6 +190,26 @@ def _cleanup_matrix_post(client, base_url: str, ep: dict, ep_results: list[dict]
         pass
 
 
+def _sanitize_track_newpoints(body) -> dict:
+    """Replace non-empty newPoints arrays with [] in track entries.
+
+    newPoints content varies per-probe (live position updates) and would produce
+    false schema diffs between runs. The array's existence and type are recorded;
+    its contents are not.
+    """
+    if not isinstance(body, dict):
+        return body
+    data = body.get("data")
+    if not isinstance(data, dict):
+        return body
+    sanitized = {}
+    for track_id, track in data.items():
+        if isinstance(track, dict) and track.get("newPoints"):
+            track = {**track, "newPoints": []}
+        sanitized[track_id] = track
+    return {**body, "data": sanitized}
+
+
 def _is_empty_response(entry: dict) -> bool:
     """Return True if the entry's response body is None, [], or {}."""
     raw = entry.get("_raw_resp", {})
@@ -191,13 +218,28 @@ def _is_empty_response(entry: dict) -> bool:
         return True
     if isinstance(body, (list, dict)) and len(body) == 0:
         return True
-    # /api/v2/tracks returns {"data": {}, "err": "", "msg": ""} when no tracks are active
-    if (entry.get("path") == "/api/v2/tracks"
-            and isinstance(body, dict)
-            and isinstance(body.get("data"), (dict, list))
-            and len(body["data"]) == 0):
-        return True
+    # /api/v2/tracks: retry only while data has no track entries at all
+    if entry.get("path") == "/api/v2/tracks" and isinstance(body, dict):
+        data = body.get("data")
+        if isinstance(data, (dict, list)):
+            return len(data) == 0
     return False
+
+
+def _should_retry_get(entry: dict) -> bool:
+    """Return True if this GET should be retried to wait for live track data.
+
+    Only applies to /api/v2/tracks. Treats 429 (rate-limited) as 'still waiting'
+    so we cycle through the 1Hz data window instead of stopping on a rate-limit
+    error response.
+    """
+    if entry.get("path") != "/api/v2/tracks":
+        return False
+    raw = entry.get("_raw_resp", {})
+    status = raw.get("status", 0)
+    if status == 429:
+        return True  # rate-limited; retry after mandatory 1s sleep in the retry loop
+    return _is_empty_response(entry)
 
 
 def run_probe_matrix(
@@ -262,17 +304,23 @@ def run_probe_matrix(
             if (
                 retry_empty_get_max > 0
                 and method == "GET"
-                and entry.get("exists")
-                and _is_empty_response(entry)
+                and _should_retry_get(entry)
             ):
                 for attempt in range(1, retry_empty_get_max + 1):
+                    raw_status = entry.get("_raw_resp", {}).get("status", 0)
+                    reason = "429 rate-limited" if raw_status == 429 else "empty response"
+                    # /api/v2/tracks is rate-limited at 1Hz by the server. Sleep a random
+                    # duration between 1-2s to avoid phase-locking with the data window.
+                    if path_template == "/api/v2/tracks":
+                        time.sleep(random.uniform(1.0, 2.0))
+                    elif retry_empty_get_delay > 0:
+                        time.sleep(retry_empty_get_delay)
                     if verbose:
-                        print(f"    [{scenario}] GET {path_template} — empty response, retrying in {retry_empty_get_delay}s (attempt {attempt}/{retry_empty_get_max})")
-                    time.sleep(retry_empty_get_delay)
+                        print(f"    [{scenario}] GET {path_template} — {reason}, retrying (attempt {attempt}/{retry_empty_get_max})")
                     entry = probe_endpoint(
                         client, base_url, ep, method, resolved, not_found_sig, scenario
                     )
-                    if not _is_empty_response(entry):
+                    if not _should_retry_get(entry):
                         if verbose:
                             print(f"    [{scenario}] GET {path_template} — got data on attempt {attempt}")
                         break

@@ -1,7 +1,8 @@
-registry_version: 9
+registry_version: 14
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
 # Cross-checked against 5.0.9, 5.1.0, 5.2.0 docs (added time-servers write endpoints + radars/relocate)
+# Cross-checked against demo-release_5_2_3 source (added 20+ hidden/undocumented endpoints)
 # Five spot-checked endpoints at the end of this file.
 #
 # Param resolution conventions:
@@ -397,6 +398,7 @@ endpoints:
     body:
       POST:
         name: "probe-zone"
+        featureId: "probe-zone-feature"
         path:
           - [40.346, -111.797]
           - [40.346, -111.798]
@@ -409,7 +411,7 @@ endpoints:
         active: true
         notes: ""
         styles:
-          borderDash: "solid"
+          borderDash: "small"
           borderWidth: 2
           fillColor: "#21E604"
           fillOpacity: 0.1
@@ -425,6 +427,7 @@ endpoints:
     body:
       PUT:
         name: "probe-zone-updated"
+        featureId: "probe-zone-feature"
         path:
           - [40.346, -111.797]
           - [40.346, -111.798]
@@ -746,6 +749,9 @@ endpoints:
     methods: [GET, POST]
     body:
       POST: { "name": "probe-defend-point", "lat": 40.348, "lon": -111.758, "radius": 100 }
+    cleanup_id_field: name
+    pre_create:
+      - { method: DELETE, path: /api/v2/dronehunters/defend-points/probe-defend-point }
 
   - path: /api/v2/dronehunters/defend-points/{name}
     methods: [DELETE]
@@ -758,11 +764,20 @@ endpoints:
     methods: [GET, POST]
     body:
       POST: { "name": "probe-land-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+    cleanup_id_field: name
+    pre_create:
+      - { method: DELETE, path: /api/v2/dronehunters/land-zones/probe-land-zone }
 
   - path: /api/v2/dronehunters/land-zones/{name}
     methods: [PUT, DELETE]
     params:
-      name: { from: "POST /api/v2/dronehunters/land-zones", field: "name" }
+      name: { value: "probe-land-zone" }
+    pre_create:
+      - path: /api/v2/dronehunters/land-zones/probe-land-zone
+        method: DELETE
+      - path: /api/v2/dronehunters/land-zones
+        method: POST
+        body: { "name": "probe-land-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
     body:
       PUT: { "lat": 40.349, "lon": -111.759, "alt": 1351.0 }
 
@@ -811,7 +826,13 @@ endpoints:
   - path: /api/v2/dronehunters/drop-zones/{name}
     methods: [PUT, DELETE]
     params:
-      name: { from: "POST /api/v2/dronehunters/drop-zones", field: "name" }
+      name: { value: "probe-drop-zone" }
+    pre_create:
+      - path: /api/v2/dronehunters/drop-zones/probe-drop-zone
+        method: DELETE
+      - path: /api/v2/dronehunters/drop-zones
+        method: POST
+        body: { "name": "probe-drop-zone", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
     body:
       PUT: { "lat": 40.349, "lon": -111.759, "alt": 1351.0 }
 
@@ -856,14 +877,15 @@ endpoints:
     methods: [GET, PUT]
     body:
       PUT:
-        gc_desc: "probe-ground-control"
+        # Full GC record required; server-generated fields (_id, apiKey, created, modified) are omitted
+        gc_desc: "Default Ground Control"
         hostName: "ground-control"
         port: 8083
-        gc_loc: "DGC1"
+        default_ceiling: 3001
+        default_floor: 0
         max_drop_zone_distance: 100
         max_land_zone_distance: 100
-        default_floor: 1380
-        default_ceiling: 2500
+        status: "available"
 
   - path: /api/v2/dronehunters/groundcontrol/{host}/{port}
     methods: [GET]
@@ -878,13 +900,38 @@ endpoints:
 
   - path: /api/v2/dronehunters/groundcontrol/set-registered-radio
     methods: [POST]
+    # DANGER: Using probe-placeholder values (e.g. model="probe-model") triggers a bug
+    # that permanently corrupts the registered-radio state, requiring a full system reset
+    # to recover. Always send exactly these real Microhard values.
     body:
-      POST: { "model": "probe-model", "address": "probe-address" }
+      POST: { "model": "Microhard", "address": "172.16.10.10" }
 
   - path: /api/v2/dronehunters/groundcontrol/radio-frequency-settings
     methods: [GET, POST]
     body:
-      POST: { "settings": {} }
+      POST:
+        address: "172.16.10.10"
+        bandwidth_bytes_in: -1
+        bandwidth_bytes_out: -1
+        baud_rate: 0
+        can_frequency_hop: false
+        can_set_frequency: false
+        can_toggle_pairing: true
+        can_toggle_transmit: true
+        frequency: 1820
+        frequency_hop_threshold_db: null
+        frequency_ranges: []
+        hop_frequencies: []
+        id: "172.16.10.10"
+        is_frequency_hop_enabled: false
+        is_network_id_number: false
+        make: "Microhard"
+        model: "pDDL1800-AES256"
+        network_id: "FTxDH"
+        network_id_range: null
+        serial_port_path: null
+        transmitting: true
+        type: "UDP"
 
   - path: /api/v2/dronehunters/get-global-rules-of-engagement
     methods: [GET]
@@ -926,20 +973,50 @@ endpoints:
         cage_type: "KEEP_HUNTER_OUT"
         ceiling: 2000
         floor: 0
-        lat_lon_points: "[[40.349560,-111.757038],[40.347985,-111.757082],[40.347990,-111.756147],[40.349602,-111.756164]]"
+        # First and last points must be identical to close the polygon
+        lat_lon_points:
+          - [40.347846, -111.758030]
+          - [40.348031, -111.757816]
+          - [40.348133, -111.758022]
+          - [40.347979, -111.758175]
+          - [40.347846, -111.758030]
         mobile: false
         response_type: "STOP"
 
   - path: /api/v2/dronehunters/geocages/{name}
     methods: [PUT, DELETE]
     params:
-      name: { from: "POST /api/v2/dronehunters/geocages", field: "name" }
+      name: { value: "probe-geocage" }
+    pre_create:
+      - path: /api/v2/dronehunters/geocages/probe-geocage
+        method: DELETE
+      - path: /api/v2/dronehunters/geocages
+        method: POST
+        body:
+          name: "probe-geocage"
+          cage_type: "KEEP_HUNTER_OUT"
+          ceiling: 2000
+          floor: 0
+          lat_lon_points:
+            - [40.347846, -111.758030]
+            - [40.348031, -111.757816]
+            - [40.348133, -111.758022]
+            - [40.347979, -111.758175]
+            - [40.347846, -111.758030]
+          mobile: false
+          response_type: "STOP"
     body:
       PUT:
         cage_type: "KEEP_HUNTER_OUT"
-        ceiling: 2000
+        ceiling: 2100
         floor: 0
-        lat_lon_points: "[[40.349560,-111.757038],[40.347985,-111.757082],[40.347990,-111.756147],[40.349602,-111.756164]]"
+        # First and last points must be identical to close the polygon; name is NOT included in PUT body
+        lat_lon_points:
+          - [40.347846, -111.758030]
+          - [40.348031, -111.757816]
+          - [40.348133, -111.758022]
+          - [40.347979, -111.758175]
+          - [40.347846, -111.758030]
         mobile: false
         response_type: "STOP"
 
@@ -994,155 +1071,208 @@ endpoints:
     body:
       POST: { "waypoints": [[40.348, -111.758, 1450]], "position": [40.348, -111.758, 1450] }
 
-  # ─── Cameras ─────────────────────────────────────────────────────────────────
+  # ─── Cameras (with_tracks_only: run exclusively in the with_tracks probe pass) ──
+  #
+  # Lifecycle order enforced by YAML ordering:
+  #   1. POST /sensors/cameras  →  creates camera, returns _id
+  #   2. GET  /sensors/cameras  →  list (confirms camera visible)
+  #   3. All collection-level and per-camera action endpoints
+  #   4. GET + PUT /sensors/cameras/{id}  (skip_methods keeps DELETE away until end)
+  #   5. DELETE /sensors/cameras/{id}  (separate entry at end of this section)
 
   - path: /api/v2/sensors/cameras
     methods: [GET, POST]
+    with_tracks_only: true
+    probe_order: [POST, GET, HEAD, OPTIONS, PUT, PATCH, DELETE]
     body:
       POST:
-        name: "probe-camera"
-        controllerHostname: "10.100.16.5"
-        latitude: 40.348
-        longitude: -111.758
-        altitude: 1350.0
-        roll: 0.0
-        pitch: 0.0
-        yaw: 0.0
-
-  - path: /api/v2/sensors/cameras/{id}
-    methods: [GET, PUT, DELETE]
-    params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
-    body:
-      PUT:
-        name: "probe-camera-updated"
-        controllerHostname: "10.100.16.5"
-        latitude: 40.348
-        longitude: -111.758
-        altitude: 1350.0
+        name: 1
+        controllerHostname: "172.16.0.47"
+        hardwareModel: "visionflex"
+        latitude: 40.347800
+        longitude: -111.754519
+        altitude: 1360.0
         roll: 0.0
         pitch: 0.0
         yaw: 0.0
 
   - path: /api/v2/sensors/cameras/follow
     methods: [POST]
+    with_tracks_only: true
     body:
-      POST: { "trackType": "radar", "trackId": "probe-track-id" }
+      POST: { "trackType": "track", "trackId": "probe-track-id" }
 
   - path: /api/v2/sensors/cameras/go-to-lla
     methods: [POST]
+    with_tracks_only: true
     body:
       POST: { "latitude": 40.348, "longitude": -111.758, "altitude": 1350.0 }
 
   - path: /api/v2/sensors/cameras/stop-follow
     methods: [POST]
+    with_tracks_only: true
 
   - path: /api/v2/sensors/cameras/{id}/follow
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
     body:
-      POST: { "trackId": "probe-track-id" }
+      POST: { "trackType": "track", "trackId": "probe-track-id" }
 
   - path: /api/v2/sensors/cameras/{id}/go-to-home
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/go-to-lla
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
     body:
       POST: { "latitude": 40.348, "longitude": -111.758, "altitude": 1350.0 }
 
   - path: /api/v2/sensors/cameras/{id}/pixel-move
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
+    # Route reads req.body["pixel"]; type is a 2-element pixel coordinate [x, y]
+    body:
+      POST: { "pixel": [0, 0] }
 
   - path: /api/v2/sensors/cameras/{id}/move-camera
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
     body:
-      POST: { "ptzVector": [0, 0, 0] }
+      POST: { "ptzVector": [0.0, 0.0, 0.0] }
 
   - path: /api/v2/sensors/cameras/{id}/nudge-ptz
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
     body:
-      POST: { "ptzNudge": [0, 0, 0] }
+      POST: { "ptzNudge": [0.0, 0.0, 0.0] }
 
   - path: /api/v2/sensors/cameras/{id}/reset-ptz-nudge
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/set-home
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/stop-follow
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/thermal-focus
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
     body:
-      POST: { "focus": 0 }
+      POST: { "focus": 50.0 }
 
   - path: /api/v2/sensors/cameras/{id}/wiper-off
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/wiper-on
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/change-optical-track
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
+    # Route requires "offset" field (NOT trackType/trackId — those are ignored).
+    # Source: camera-route.js line 594: missingRequiredRequestProp(req.body, 'offset')
+    body:
+      POST: { "offset": [0, 0] }
 
   - path: /api/v2/sensors/cameras/{id}/clear-optical-track
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/start-optical-calibration
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
+    # Requires radarLLA, radarRPY, AND radarModel.
+    # SERVER BUG (5.2.3): line 749 references `missingProp` which is undefined at that
+    # scope — always returns a 500 ReferenceError even with a valid body. File a bug.
     body:
-      POST: { "radarLLA": [40.348, -111.758, 1350.0], "radarRPY": [0, 0, 90] }
+      POST: { "radarLLA": [40.348, -111.758, 1350.0], "radarRPY": [0, 0, 90], "radarModel": "R40" }
 
   - path: /api/v2/sensors/cameras/{id}/optical-calibration-status
     methods: [GET]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/confirm-radar-optical-calibration
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/deny-radar-optical-calibration
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   - path: /api/v2/sensors/cameras/{id}/stop-optical-calibration
     methods: [POST]
+    with_tracks_only: true
     params:
-      id: { from: "POST /api/v2/sensors/cameras", field: "_id" }
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
+
+  # GET + PUT run before the terminal DELETE entry below
+  - path: /api/v2/sensors/cameras/{id}
+    methods: [GET, PUT]
+    with_tracks_only: true
+    skip_methods: [DELETE]
+    params:
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
+    body:
+      PUT:
+        name: 1
+        controllerHostname: "172.16.0.47"
+        latitude: 40.347801
+        longitude: -111.754519
+        altitude: 1361.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+  # DELETE runs last — after all action endpoints have been probed with a live camera
+  - path: /api/v2/sensors/cameras/{id}
+    methods: [DELETE]
+    with_tracks_only: true
+    skip_methods: [GET, PUT, POST, PATCH]
+    params:
+      id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
   # ─── DataStream ──────────────────────────────────────────────────────────────
 
@@ -1329,6 +1459,8 @@ endpoints:
 
   - path: /api/v2/sensors/radars/{id}
     methods: [PUT, DELETE]
+    # PUT skipped: requires live radar hardware (172.16.0.47) to accept the update
+    skip_methods: [PUT]
     params:
       id: { from: "POST /api/v2/sensors/radars", field: "_id" }
     body:
@@ -1479,30 +1611,21 @@ endpoints:
 
   - path: /api/v2/sensors/rfsensors
     methods: [GET, POST]
+    # RF sensors must be deleted via DELETE /api/v2/sensors/radars/{id} (not the rfsensors path)
+    cleanup_path_prefix: /api/v2/sensors/radars
     body:
       POST:
         model: "WhiteFox"
         name: "probe-rfsensor"
-        host: "192.168.1.100"
-        username: "probe"
-        password: "probe"
-
-  - path: /api/v2/sensors/rfsensors/{id}
-    methods: [PUT]
-    params:
-      id: { from: "POST /api/v2/sensors/rfsensors", field: "_id" }
-    body:
-      PUT:
-        model: "WhiteFox"
-        name: "probe-rfsensor-updated"
-        host: "192.168.1.100"
-        username: "probe"
-        password: "probe"
-
-  - path: /api/v2/sensors/rfsensors/jam
-    methods: [POST]
-    body:
-      POST: { "jammingState": [] }
+        host: "172.16.0.47"
+        port: 9992
+        username: "test"
+        password: "test"
+        latitude: 0
+        longitude: 0
+        altitude: 0
+        yaw: 0
+        simulated: false
 
   - path: /api/v2/sensors/rfsensors/{id}/turn-jammer
     methods: [PUT]
@@ -1513,6 +1636,169 @@ endpoints:
 
   - path: /api/v2/sensors/rfsensors/directional-jammers
     methods: [GET]
+
+  - path: /api/v2/sensors/rfsensors/jam
+    methods: [POST]
+    # Skipped: triggers real RF jamming hardware; probe infrastructure built, test manually
+    skip_methods: [POST]
+    body:
+      POST: { "jammingState": [] }
+
+  - path: /api/v2/sensors/rfsensors/{id}
+    methods: [PUT]
+    params:
+      id: { from: "POST /api/v2/sensors/rfsensors", field: "_id" }
+    body:
+      PUT:
+        model: "WhiteFox"
+        name: "probe-rfsensor-updated"
+        host: "172.16.0.47"
+        username: "test"
+        password: "test"
+
+  # ─── DroneHunter - Autonomous / Engagement (hidden, source-discovered) ────────
+
+  - path: /api/v2/dronehunters/autonomous-deploy
+    methods: [POST]
+    body:
+      POST: { "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/autonomous-engage-position
+    methods: [POST]
+    body:
+      POST: { "neutralizationMode": "ANY", "lat": 40.348, "lon": -111.758, "alt": 1450.0, "azm": 0 }
+
+  - path: /api/v2/dronehunters/autonomous-engage-target
+    methods: [POST]
+    body:
+      POST: { "neutralizationMode": "ANY", "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/capture
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/flight-command
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "command": "probe-command" }
+
+  - path: /api/v2/dronehunters/{id}/one-time-command
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "command": "probe-command" }
+
+  - path: /api/v2/dronehunters/{id}/artemis/abort
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+
+  - path: /api/v2/dronehunters/{id}/engage-position
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "lat": 40.348, "lon": -111.758, "alt": 1450.0, "azm": 0 }
+
+  - path: /api/v2/dronehunters/{id}/engage-target
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "trackId": "probe-track-id" }
+
+  - path: /api/v2/dronehunters/{id}/set-rules-of-engagement
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "acquire_targets": true, "default_mission": "defend", "weapons_enabled": false, "override_global": false }
+
+  - path: /api/v2/dronehunters/{id}/position-src
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "mode": "GPS" }
+
+  - path: /api/v2/dronehunters/{id}/ekf-pos-source-failsafe
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "failsafe_mode": "ALT_HOLD" }
+
+  - path: /api/v2/dronehunters/{id}/set-gps-denied-origin
+    methods: [PUT]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      PUT: { "origin_source": "GPS", "lat": 40.348, "lon": -111.758, "alt": 1350.0 }
+
+  - path: /api/v2/dronehunters/{id}/drop-payload
+    methods: [POST]
+    params:
+      id: { from: "GET /api/v2/dronehunters", field: "hunter_id" }
+    body:
+      POST: { "payload": "probe-payload" }
+
+  # ─── Sensors - Devices (hidden, source-discovered) ───────────────────────────
+
+  - path: /api/v2/sensors/devices
+    methods: [GET, POST, DELETE]
+    body:
+      POST: { "clientId": "probe-client", "type": "radar" }
+      DELETE: { "clientId": "probe-client", "type": "radar" }
+
+  - path: /api/v2/sensors/firefly/fovs
+    methods: [GET]
+
+  - path: /api/v2/sensors/radars/playbackMode/command
+    methods: [GET]
+
+  # ─── System - Health (under development, source-discovered) ──────────────────
+
+  - path: /api/v2/system/health
+    methods: [GET, POST]
+    # POST is a stub returning "this endpoint is still under development"
+
+  - path: /api/v2/system/health/{id}
+    methods: [PUT, DELETE]
+    # Both PUT and DELETE are stubs returning "this endpoint is still under development"
+    params:
+      id: { value: "probe-health-id" }
+
+  # ─── App - System Management (source-discovered) ─────────────────────────────
+
+  - path: /api/v2/download
+    methods: [GET]
+
+  - path: /api/v2/app/set-system-time
+    methods: [POST]
+    body:
+      POST: { "timeString": "2026-01-01T00:00:00Z" }
+
+  - path: /api/v2/app/reset-system-setup
+    methods: [POST]
+    # DANGER: Resets admin user using a license key. Sending this with a valid key
+    # will wipe admin credentials. Probe bodies use a deliberately invalid key so the
+    # server returns 403 (not 200). Rate-limited to 1 attempt/minute server-side.
+    skip_methods: [POST]
+    body:
+      POST: { "key": "probe.placeholder" }
+
+  # ─── Tracks - Live Update (source-discovered) ────────────────────────────────
+
+  - path: /api/v2/tracks/update-live-track
+    methods: [PUT]
+    body:
+      PUT: { "id": "probe-track-id" }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HAND-CHECK NOTES (5 endpoints verified against SkyDome_Smart_API_5.2.3.html)
