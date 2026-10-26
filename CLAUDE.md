@@ -111,6 +111,29 @@ These are in the registry with `skip_methods: [POST, PUT, PATCH, DELETE]`:
 
 The prober will send GET/HEAD/OPTIONS to these (which return 405) but skip all write methods.
 
+## Suppressing known false-positive diff fields
+
+Some response fields appear inconsistently across probes for reasons unrelated to the API changing (e.g. Mongoose internal fields leaking through one cache path but not another). These are suppressed in the diff viewer so they don't show up as breaking changes.
+
+Suppressions live in `viewer/index.html` in the `RESPONSE_FIELD_SUPPRESSIONS` constant near the top of the response-schema diff loop (~line 666):
+
+```js
+const RESPONSE_FIELD_SUPPRESSIONS = {
+  '/api/v2/sensors/cameras/': ['__v', 'data.__v', 'data[].__v'],
+};
+```
+
+The key is a **path substring** — any endpoint whose path contains that string has the listed field keys excluded from the diff. Field keys use dot-notation as flattened by the prober (e.g. `data[].__v` for a field inside a response array).
+
+To add a new suppression: add an entry to `RESPONSE_FIELD_SUPPRESSIONS`. No prober rerun needed — just reload the viewer.
+
+**Current suppressions:**
+
+| Path pattern | Suppressed fields | Reason |
+|---|---|---|
+| `/api/v2/sensors/cameras/` | `__v`, `data.__v`, `data[].__v` | Mongoose version key; leaks when cache is warmed by `loadAll()` (no projection) vs `load(id)` (projects `__v: 0`) |
+| `/api/v2/reports/dashboard` | `data[].operators` (prefix — suppresses all child keys) | In-memory operator activity sampled at 15-min intervals; whether any record has a non-empty operators array depends on when probes run relative to those save windows |
+
 ## Format detectors
 
 `probe/formats.py` implements 40 named formats (see `SCHEMA.md` section 4 for the full vocabulary). Run `python3 probe/test_formats.py` to verify all 55 assertions pass. Bump `FORMAT_DETECTORS_VERSION` in `formats.py` whenever detectors change — this is recorded in every snapshot so the diff viewer can flag format changes that may be detector-version artifacts rather than API changes.

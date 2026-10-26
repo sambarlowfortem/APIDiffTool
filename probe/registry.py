@@ -67,7 +67,7 @@ def get_listed_methods(endpoint: dict) -> list[str]:
 
 
 def get_all_methods() -> list[str]:
-    return ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+    return ["GET", "POST", "PUT", "DELETE"]
 
 
 def extract_path_params(path: str) -> list[str]:
@@ -137,7 +137,7 @@ class ParamResolver:
             body = self._find_body(method, path)
             url = base_url.rstrip("/") + path
             try:
-                if body and method in ("POST", "PUT", "PATCH"):
+                if body and method in ("POST", "PUT"):
                     resp = self._http(method, url, json=body)
                 else:
                     resp = self._http(method, url)

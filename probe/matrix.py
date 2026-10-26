@@ -1,4 +1,4 @@
-"""Probe matrix: send all 7 methods to every registered endpoint."""
+"""Probe matrix: send GET, POST, PUT, DELETE to every registered endpoint."""
 
 import random
 import re
@@ -10,8 +10,8 @@ from .registry import get_all_methods, get_listed_methods, resolve_deprecated, e
 from .schema_utils import infer_schema_from_body, merge_schemas, finalize_schema
 
 
-ALL_METHODS = ["POST", "PUT", "PATCH", "GET", "DELETE", "HEAD", "OPTIONS"]
-WRITABLE_METHODS = {"POST", "PUT", "PATCH"}
+ALL_METHODS = ["POST", "PUT", "GET", "DELETE"]
+WRITABLE_METHODS = {"POST", "PUT"}
 
 
 def substitute_params(path_template: str, resolved: dict) -> str:
@@ -253,7 +253,7 @@ def run_probe_matrix(
     retry_empty_get_max: int = 0,
     retry_empty_get_delay: int = 3,
 ) -> list[dict]:
-    """Run all 7 methods against every endpoint in the registry.
+    """Run GET, POST, PUT, DELETE against every endpoint in the registry.
 
     Returns a list of endpoint result dicts (one per path×method).
     """

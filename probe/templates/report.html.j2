@@ -29,10 +29,7 @@ h1{font-size:1.4rem;font-weight:700;margin-bottom:4px}
 .GET{background:#dcfce7;color:#166534}
 .POST{background:#dbeafe;color:#1d4ed8}
 .PUT{background:#fef9c3;color:#854d0e}
-.PATCH{background:#fef3c7;color:#92400e}
 .DELETE{background:#fee2e2;color:#991b1b}
-.HEAD{background:#f3e8ff;color:#6b21a8}
-.OPTIONS{background:#e0f2fe;color:#075985}
 .badge-deprecated{background:#fff7ed;color:#c2410c;border:1px solid #fdba74;font-size:.72rem;padding:2px 8px;border-radius:5px}
 .status-badge{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-size:.72rem;padding:2px 8px;border-radius:5px;font-family:monospace}
 .scenario-label{background:#ede9fe;color:#5b21b6;font-size:.7rem;padding:2px 8px;border-radius:5px}
@@ -76,6 +73,134 @@ pre{background:#1e293b;color:#e2e8f0;padding:12px;border-radius:8px;font-size:.7
       {% endfor %}
     </ul>
   </div>
+
+  {% if trace_entries %}
+  <style>
+    .trace-outer{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:24px;overflow:hidden}
+    .trace-outer-summary{padding:12px 16px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;cursor:pointer;font-size:.85rem;font-weight:600;color:#334155;list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+    .trace-outer-summary::-webkit-details-marker{display:none}
+    .trace-filter-bar{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid #f1f5f9}
+    .trace-filter-bar input{flex:1;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:.82rem;font-family:monospace;outline:none}
+    .trace-filter-bar input:focus{border-color:#6366f1}
+    .trace-entry{border-bottom:1px solid #f1f5f9}
+    .trace-entry:last-child{border-bottom:none}
+    .trace-entry-summary{padding:9px 16px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;user-select:none}
+    .trace-entry-summary::-webkit-details-marker{display:none}
+    .trace-entry-summary:hover{background:#f8fafc}
+    .trace-arrow{font-size:.7rem;color:#94a3b8;width:1rem;flex-shrink:0}
+    .trace-num{font-size:.72rem;color:#94a3b8;width:2rem;flex-shrink:0;text-align:right}
+    .trace-ts{font-size:.72rem;font-family:monospace;color:#94a3b8;white-space:nowrap;flex-shrink:0}
+    .trace-url{font-family:monospace;font-size:.8rem;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+    .trace-status{font-family:monospace;font-size:.78rem;font-weight:700;flex-shrink:0}
+    .trace-status.ok{color:#166534}
+    .trace-status.redir{color:#92400e}
+    .trace-status.err{color:#991b1b}
+    .trace-status.none{color:#94a3b8}
+    .trace-panel{padding:12px 16px 16px;background:#fafafa;border-top:1px solid #f1f5f9;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media(max-width:760px){.trace-panel{grid-template-columns:1fr}}
+    .trace-side-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;font-weight:600;margin-bottom:6px}
+    .trace-section{margin-bottom:10px}
+    .trace-section:last-child{margin-bottom:0}
+    .trace-field-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;font-weight:600;margin-bottom:3px}
+    .trace-pre{background:#1e293b;color:#e2e8f0;padding:10px;border-radius:6px;font-size:.75rem;overflow:auto;max-height:220px;white-space:pre-wrap;word-break:break-word;margin:0}
+    .trace-none{font-size:.78rem;color:#94a3b8;font-style:italic}
+    .trace-error{font-size:.78rem;color:#be123c;font-weight:600}
+  </style>
+  <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:.82rem;color:#92400e;font-weight:600">
+    ⚠ Trace mode — {{ trace_entries|length }} requests captured. Authorization tokens are truncated.
+  </div>
+  <div class="trace-outer">
+    <details id="trace-outer-details" open>
+      <summary class="trace-outer-summary">
+        <span id="trace-outer-arrow">▼</span>
+        <span>Full Request Trace — {{ trace_entries|length }} requests</span>
+        <span style="font-size:.72rem;font-weight:400;color:#64748b;margin-left:auto">Click to collapse</span>
+      </summary>
+      <div class="trace-filter-bar">
+        <input id="trace-filter" type="text" placeholder="Filter by URL or method…" oninput="filterTrace(this.value)">
+        <span id="trace-count" style="font-size:.78rem;color:#94a3b8;white-space:nowrap">{{ trace_entries|length }} shown</span>
+      </div>
+      <div id="trace-list">
+        {% for e in trace_entries %}
+        <div class="trace-entry" data-url="{{ e.url }}" data-method="{{ e.method }}">
+          <details>
+            <summary class="trace-entry-summary">
+              <span class="trace-arrow">▶</span>
+              <span class="trace-num">{{ e.n }}</span>
+              <span class="method-badge {{ e.method }}">{{ e.method }}</span>
+              {% if e.retry > 0 %}<span class="flag-badge">retry {{ e.retry }}</span>{% endif %}
+              <span class="trace-url" title="{{ e.url }}">{{ e.url }}</span>
+              <span class="trace-ts">{{ e.ts }}</span>
+              <span class="trace-status {% if e.status is none %}none{% elif e.status < 300 %}ok{% elif e.status < 400 %}redir{% else %}err{% endif %}">
+                {{ e.status if e.status is not none else '—' }}
+              </span>
+            </summary>
+            <div class="trace-panel">
+              <div>
+                <div class="trace-side-label">Request</div>
+                {% if e.error %}
+                <div class="trace-section">
+                  <div class="trace-field-label">Connection Error</div>
+                  <div class="trace-error">{{ e.error }}</div>
+                </div>
+                {% endif %}
+                <div class="trace-section">
+                  <div class="trace-field-label">Headers</div>
+                  {% if e.req_headers_str %}
+                  <pre class="trace-pre">{{ e.req_headers_str }}</pre>
+                  {% else %}<span class="trace-none">none</span>{% endif %}
+                </div>
+                <div class="trace-section">
+                  <div class="trace-field-label">Body</div>
+                  {% if e.req_body_str %}
+                  <pre class="trace-pre">{{ e.req_body_str }}</pre>
+                  {% else %}<span class="trace-none">none</span>{% endif %}
+                </div>
+              </div>
+              <div>
+                <div class="trace-side-label">Response</div>
+                <div class="trace-section">
+                  <div class="trace-field-label">Headers</div>
+                  {% if e.resp_headers_str %}
+                  <pre class="trace-pre">{{ e.resp_headers_str }}</pre>
+                  {% else %}<span class="trace-none">none</span>{% endif %}
+                </div>
+                <div class="trace-section">
+                  <div class="trace-field-label">Body</div>
+                  {% if e.resp_body_str %}
+                  <pre class="trace-pre">{{ e.resp_body_str }}</pre>
+                  {% else %}<span class="trace-none">none</span>{% endif %}
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+  </div>
+  <script>
+    function filterTrace(q) {
+      q = q.toLowerCase();
+      var entries = document.querySelectorAll('#trace-list .trace-entry');
+      var shown = 0;
+      entries.forEach(function(e) {
+        var match = !q || e.dataset.url.toLowerCase().includes(q) || e.dataset.method.toLowerCase().includes(q);
+        e.style.display = match ? '' : 'none';
+        if (match) shown++;
+      });
+      document.getElementById('trace-count').textContent = shown + ' shown';
+    }
+    document.getElementById('trace-outer-details').addEventListener('toggle', function() {
+      document.getElementById('trace-outer-arrow').textContent = this.open ? '▼' : '▶';
+    });
+    document.querySelectorAll('#trace-list .trace-entry details').forEach(function(d) {
+      d.addEventListener('toggle', function() {
+        this.querySelector('.trace-arrow').textContent = this.open ? '▼' : '▶';
+      });
+    });
+  </script>
+  {% endif %}
 
   {% for group in groups %}
   <div class="path-group" id="path-{{ loop.index }}">

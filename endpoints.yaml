@@ -239,11 +239,11 @@ endpoints:
 
   - path: /api/v2/service/restart
     methods: [POST]
-    skip_methods: [POST, PUT, PATCH, DELETE]  # executes a real system restart
+    skip_methods: [POST, PUT, DELETE]  # executes a real system restart
 
   - path: /api/v2/service/shutdown
     methods: [POST]
-    skip_methods: [POST, PUT, PATCH, DELETE]  # executes a real system shutdown
+    skip_methods: [POST, PUT, DELETE]  # executes a real system shutdown
 
   - path: /api/v2/app/state
     methods: [GET]
@@ -1083,7 +1083,7 @@ endpoints:
   - path: /api/v2/sensors/cameras
     methods: [GET, POST]
     with_tracks_only: true
-    probe_order: [POST, GET, HEAD, OPTIONS, PUT, PATCH, DELETE]
+    probe_order: [POST, GET, PUT, DELETE]
     body:
       POST:
         name: 1
@@ -1270,7 +1270,7 @@ endpoints:
   - path: /api/v2/sensors/cameras/{id}
     methods: [DELETE]
     with_tracks_only: true
-    skip_methods: [GET, PUT, POST, PATCH]
+    skip_methods: [GET, PUT, POST]
     params:
       id: { from: "GET /api/v2/sensors/cameras", field: "_id", depends_on: "POST /api/v2/sensors/cameras", require_nonempty: true }
 
@@ -1278,7 +1278,7 @@ endpoints:
 
   - path: /datastream/config
     methods: [GET, POST, PUT, DELETE]
-    probe_order: [DELETE, GET, HEAD, OPTIONS, POST, PUT, PATCH]
+    probe_order: [DELETE, GET, POST, PUT]
     body:
       POST:
         host: "172.16.0.45:3151"

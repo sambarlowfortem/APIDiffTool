@@ -8,7 +8,7 @@ from .matrix import substitute_params, _safe_json, _extract_id_from_response
 from .registry import get_listed_methods, extract_path_params
 
 
-WRITABLE_METHODS = {"POST", "PUT", "PATCH"}
+WRITABLE_METHODS = {"POST", "PUT"}
 
 
 def run_ablation(

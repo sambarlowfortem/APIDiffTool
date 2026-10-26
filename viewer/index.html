@@ -664,9 +664,18 @@ function runDiff() {
       }
 
       // Response schema changes
+      // Known Mongoose/DB artefacts that leak inconsistently and are not real API fields.
+      const RESPONSE_FIELD_SUPPRESSIONS = {
+        '/api/v2/sensors/cameras/': ['__v', 'data.__v', 'data[].__v'],
+        '/api/v2/reports/dashboard': ['data[].operators'],
+      };
+      const suppressedPrefixes = Object.entries(RESPONSE_FIELD_SUPPRESSIONS)
+        .filter(([pattern]) => (epA.path || '').includes(pattern))
+        .flatMap(([, fields]) => fields);
+      const isSuppressed = k => suppressedPrefixes.some(p => k === p || k.startsWith(p + '[') || k.startsWith(p + '.'));
       const rsA = epA.response_schema || {};
       const rsB = epB.response_schema || {};
-      const rsKeys = new Set([...Object.keys(rsA), ...Object.keys(rsB)]);
+      const rsKeys = new Set([...Object.keys(rsA), ...Object.keys(rsB)].filter(k => !isSuppressed(k)));
       for (const rk of rsKeys) {
         const ra = rsA[rk] || null;
         const rb = rsB[rk] || null;

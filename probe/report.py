@@ -64,6 +64,7 @@ def generate_report(
     registry: dict,
     redact_fields: set = None,
     output_path: str = None,
+    trace_log: list = None,
 ) -> str:
     """Generate the HTML run report and return it as a string."""
     redact_fields = redact_fields or set()
@@ -139,10 +140,13 @@ def generate_report(
     )
     template = env.get_template("report.html.j2")
 
+    trace_entries = _prepare_trace(trace_log, redact_fields) if trace_log else None
+
     html = template.render(
         snapshot=snapshot,
         groups=groups,
         working_count=len(working),
+        trace_entries=trace_entries,
     )
 
     if output_path:
@@ -151,6 +155,49 @@ def generate_report(
             f.write(html)
 
     return html
+
+
+def _prepare_trace(trace_log: list, redact_fields: set) -> list:
+    """Format trace entries for the template."""
+    out = []
+    for i, entry in enumerate(trace_log, start=1):
+        req_body = entry.get("req_body")
+        if req_body is not None:
+            req_body = _redact_body(req_body, redact_fields)
+            req_body_str = json.dumps(req_body, indent=2)
+        else:
+            req_body_str = None
+
+        req_headers = entry.get("req_headers") or {}
+        req_headers_str = "\n".join(f"{k}: {v}" for k, v in req_headers.items())
+
+        resp_body = entry.get("resp_body")
+        if resp_body is not None:
+            if isinstance(resp_body, (dict, list)):
+                resp_body = _redact_body(resp_body, redact_fields)
+                resp_body_str = json.dumps(resp_body, indent=2)
+            else:
+                resp_body_str = str(resp_body)
+        else:
+            resp_body_str = None
+
+        resp_headers = entry.get("resp_headers") or {}
+        resp_headers_str = "\n".join(f"{k}: {v}" for k, v in resp_headers.items())
+
+        out.append({
+            "n": i,
+            "ts": entry.get("ts", ""),
+            "method": entry.get("method", ""),
+            "url": entry.get("url", ""),
+            "req_headers_str": req_headers_str,
+            "req_body_str": req_body_str,
+            "status": entry.get("status"),
+            "resp_headers_str": resp_headers_str,
+            "resp_body_str": resp_body_str,
+            "retry": entry.get("retry", 0),
+            "error": entry.get("error"),
+        })
+    return out
 
 
 def _has_scenario_diff(scenarios_data: list) -> bool:

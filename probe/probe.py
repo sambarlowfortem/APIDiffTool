@@ -60,6 +60,8 @@ def parse_args():
     p.add_argument("--delay", type=float, default=0.0,
                    help="Seconds to sleep between requests (default: 0). Use 0.1-0.5 to reduce server load.")
     p.add_argument("--verbose", action="store_true", default=True)
+    p.add_argument("--trace", action="store_true", default=False,
+                   help="Include a full request-by-request trace in the HTML report (dev/debug mode)")
     p.add_argument("--skip-track-seeding", action="store_true",
                    help="Skip the track-seeded re-probe of reports/tracks endpoints")
     p.add_argument("--track-settle-wait", type=int, default=5,
@@ -146,7 +148,7 @@ def main():
     print("Authentication OK")
 
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    client = HttpClient(auth, delay=args.delay)
+    client = HttpClient(auth, delay=args.delay, trace=args.trace)
 
     # Not-found baseline
     print("\nRecording not-found baseline...")
@@ -220,6 +222,8 @@ def main():
             print("\nRestoring container state...")
             containers.restore_initial_state()
 
+    wt_client = None  # may be created in track-seeded pass; initialised here for trace collection
+
     # Track-seeded pass: inject live tracks so track endpoints return real schemas
     if run_track_pass:
         print("\n--- Track-seeded probe pass (tracks + reports/tracks endpoints) ---")
@@ -227,7 +231,7 @@ def main():
         if track_registry["endpoints"]:
             # Fresh client — avoids httpx cookie accumulation from the preceding probe run
             # causing 401s on track and datastream endpoints.
-            wt_client = HttpClient(auth, delay=args.delay)
+            wt_client = HttpClient(auth, delay=args.delay, trace=args.trace)
             def wt_http_fn(method, url, **kwargs):
                 return wt_client.request(method, url, **kwargs)
 
@@ -282,8 +286,11 @@ def main():
                 seeder.stop()
                 wt_client.close()
 
+    trace_log = client.get_trace() if args.trace else []
     auth.stop_auto_refresh()
     client.close()
+    if args.trace and wt_client is not None:
+        trace_log = trace_log + wt_client.get_trace()
 
     # Build snapshot
     snapshot = _build_snapshot(
@@ -304,7 +311,8 @@ def main():
     print(f"\nSnapshot written: {snapshot_path}")
 
     # Write HTML report
-    generate_report(snapshot, registry, redact_fields=redact_fields, output_path=report_path)
+    generate_report(snapshot, registry, redact_fields=redact_fields, output_path=report_path,
+                    trace_log=trace_log if args.trace else None)
     print(f"Report written  : {report_path}")
 
     print("\nDone.")
@@ -327,7 +335,7 @@ def _build_snapshot(
     dep_map = {}
     for ep in registry.get("endpoints", []):
         from probe.registry import resolve_deprecated
-        for method in ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]:
+        for method in ["GET", "POST", "PUT", "DELETE"]:
             dep = resolve_deprecated(ep, method)
             if dep:
                 dep_map[(ep["path"], method)] = dep
@@ -398,7 +406,7 @@ def _filter_track_endpoints(registry: dict) -> dict:
             # config is not disturbed before or during the GET probe.
             ep_copy = dict(ep)
             existing_skip = set(ep_copy.get("skip_methods") or [])
-            ep_copy["skip_methods"] = sorted(existing_skip | {"POST", "PUT", "PATCH", "DELETE"})
+            ep_copy["skip_methods"] = sorted(existing_skip | {"POST", "PUT", "DELETE"})
             endpoints.append(ep_copy)
         elif (ep["path"].startswith("/api/v2/tracks")
               or ep["path"].startswith("/api/v2/reports/tracks")
