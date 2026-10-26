@@ -327,6 +327,13 @@ def run_probe_matrix(
 
             ep_results.append(entry)
 
+            # Wait for server-side write to propagate before the GET fires.
+            # Only applies when POST succeeded and GET is still pending in this endpoint's method sequence.
+            if method == "POST" and entry.get("_raw_resp", {}).get("status", 0) in range(200, 300):
+                remaining = effective_order[effective_order.index("POST") + 1:]
+                if "GET" in remaining:
+                    time.sleep(2)
+
         results.extend(ep_results)
 
         # Best-effort cleanup of POST-created resource (after GET has already run)
