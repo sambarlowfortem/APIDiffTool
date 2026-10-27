@@ -83,11 +83,13 @@ def probe_endpoint(
     exists = not matches_not_found(resp, not_found_sig)
     outcomes = {"baseline": {"status": resp.status_code}}
 
-    # Parse body once; sanitize newPoints on /api/v2/tracks so transient track
-    # data doesn't produce schema diffs between runs.
+    # Parse body once; sanitize volatile fields so transient data doesn't
+    # produce schema diffs between runs.
     raw_body = _safe_json(resp)
     if path_template == "/api/v2/tracks" and scenario == "with_tracks":
         raw_body = _sanitize_track_newpoints(raw_body)
+    if path_template == "/api/v2/dronehunters":
+        raw_body = _sanitize_dronehunter_health(raw_body)
 
     # Infer response schema
     response_schema = None
@@ -210,36 +212,61 @@ def _sanitize_track_newpoints(body) -> dict:
     return {**body, "data": sanitized}
 
 
+def _sanitize_dronehunter_health(body) -> dict:
+    """Replace health dict contents with {} in dronehunter entries.
+
+    health varies per-probe (assignment, condition, etc.) and would produce
+    false schema diffs between runs. The field's existence and dict type are
+    recorded; its contents are not.
+    """
+    if not isinstance(body, dict):
+        return body
+    data = body.get("data")
+    if not isinstance(data, list):
+        return body
+    sanitized = []
+    for item in data:
+        if isinstance(item, dict) and isinstance(item.get("health"), dict):
+            item = {**item, "health": {}}
+        sanitized.append(item)
+    return {**body, "data": sanitized}
+
+
 def _is_empty_response(entry: dict) -> bool:
-    """Return True if the entry's response body is None, [], or {}."""
+    """Return True if the entry's response body is None, [], {}, or has an empty data collection."""
     raw = entry.get("_raw_resp", {})
     body = raw.get("body")
     if body is None:
         return True
     if isinstance(body, (list, dict)) and len(body) == 0:
         return True
-    # /api/v2/tracks: retry only while data has no track entries at all
-    if entry.get("path") == "/api/v2/tracks" and isinstance(body, dict):
+    if isinstance(body, dict):
         data = body.get("data")
-        if isinstance(data, (dict, list)):
-            return len(data) == 0
+        if isinstance(data, (dict, list)) and len(data) == 0:
+            return True
     return False
 
 
-def _should_retry_get(entry: dict) -> bool:
-    """Return True if this GET should be retried to wait for live track data.
+def _should_retry_get(entry: dict, post_succeeded: bool = False) -> bool:
+    """Return True if this GET should be retried.
 
-    Only applies to /api/v2/tracks. Treats 429 (rate-limited) as 'still waiting'
-    so we cycle through the 1Hz data window instead of stopping on a rate-limit
-    error response.
+    For /api/v2/tracks: retries on empty response or 429 (rate-limited at 1Hz).
+    For any other endpoint where the preceding POST succeeded: retries on empty
+    data, to handle server-side list caches that haven't been invalidated yet.
     """
-    if entry.get("path") != "/api/v2/tracks":
-        return False
+    path = entry.get("path", "")
     raw = entry.get("_raw_resp", {})
     status = raw.get("status", 0)
-    if status == 429:
-        return True  # rate-limited; retry after mandatory 1s sleep in the retry loop
-    return _is_empty_response(entry)
+
+    if path == "/api/v2/tracks":
+        if status == 429:
+            return True  # rate-limited; retry after mandatory 1s sleep in the retry loop
+        return _is_empty_response(entry)
+
+    if post_succeeded:
+        return _is_empty_response(entry)
+
+    return False
 
 
 def run_probe_matrix(
@@ -289,6 +316,7 @@ def run_probe_matrix(
         seen = set(probe_order)
         effective_order = list(probe_order) + [m for m in ALL_METHODS if m not in seen]
         ep_results = []
+        post_succeeded_for_ep = False
 
         for method in effective_order:
             if method in skip:
@@ -301,10 +329,13 @@ def run_probe_matrix(
                 client, base_url, ep, method, resolved, not_found_sig, scenario
             )
 
+            if method == "POST" and entry.get("_raw_resp", {}).get("status", 0) in range(200, 300):
+                post_succeeded_for_ep = True
+
             if (
                 retry_empty_get_max > 0
                 and method == "GET"
-                and _should_retry_get(entry)
+                and _should_retry_get(entry, post_succeeded=post_succeeded_for_ep)
             ):
                 for attempt in range(1, retry_empty_get_max + 1):
                     raw_status = entry.get("_raw_resp", {}).get("status", 0)
@@ -320,19 +351,12 @@ def run_probe_matrix(
                     entry = probe_endpoint(
                         client, base_url, ep, method, resolved, not_found_sig, scenario
                     )
-                    if not _should_retry_get(entry):
+                    if not _should_retry_get(entry, post_succeeded=post_succeeded_for_ep):
                         if verbose:
                             print(f"    [{scenario}] GET {path_template} — got data on attempt {attempt}")
                         break
 
             ep_results.append(entry)
-
-            # Wait for server-side write to propagate before the GET fires.
-            # Only applies when POST succeeded and GET is still pending in this endpoint's method sequence.
-            if method == "POST" and entry.get("_raw_resp", {}).get("status", 0) in range(200, 300):
-                remaining = effective_order[effective_order.index("POST") + 1:]
-                if "GET" in remaining:
-                    time.sleep(2)
 
         results.extend(ep_results)
 

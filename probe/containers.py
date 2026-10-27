@@ -110,7 +110,9 @@ class ContainerManager:
             hangar_ok = _check_count(api_client, base_url, "/api/v2/dronehunters/hangars", expected_hangar)
             hunter_ok = _check_count(api_client, base_url, "/api/v2/dronehunters", expected_hunters)
             if hangar_ok and hunter_ok:
-                print("  Service settled.")
+                print("  Service settled. Waiting 30s for background services to finish populating...")
+                time.sleep(30)
+                print("  Ready.")
                 return
             time.sleep(2)
         print(f"  Warning: service did not settle within {settle_wait}s, continuing anyway.")

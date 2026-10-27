@@ -668,11 +668,20 @@ function runDiff() {
       const RESPONSE_FIELD_SUPPRESSIONS = {
         '/api/v2/sensors/cameras/': ['__v', 'data.__v', 'data[].__v'],
         '/api/v2/reports/dashboard': ['data[].operators'],
+        '/api/v2/dronehunters': ['data[].calibration_progress'],
+      };
+      // Fields checked for presence (added/removed) only — type/format differences are ignored.
+      const PRESENCE_ONLY_FIELDS = {
+        '/api/v2/dronehunters': ['data[].radar_time_slot'],
       };
       const suppressedPrefixes = Object.entries(RESPONSE_FIELD_SUPPRESSIONS)
         .filter(([pattern]) => (epA.path || '').includes(pattern))
         .flatMap(([, fields]) => fields);
       const isSuppressed = k => suppressedPrefixes.some(p => k === p || k.startsWith(p + '[') || k.startsWith(p + '.'));
+      const presenceOnlyPrefixes = Object.entries(PRESENCE_ONLY_FIELDS)
+        .filter(([pattern]) => (epA.path || '').includes(pattern))
+        .flatMap(([, fields]) => fields);
+      const isPresenceOnly = k => presenceOnlyPrefixes.some(p => k === p || k.startsWith(p + '[') || k.startsWith(p + '.'));
       const rsA = epA.response_schema || {};
       const rsB = epB.response_schema || {};
       const rsKeys = new Set([...Object.keys(rsA), ...Object.keys(rsB)].filter(k => !isSuppressed(k)));
@@ -684,7 +693,7 @@ function runDiff() {
         } else if (ra && !rb) {
           changes.push({ category: 'response_field', label: `Response field removed: ${rk}`, valA: `${ra.type || ''}`, valB: '—', breaking: true });
           isBreaking = true;
-        } else if (ra && rb) {
+        } else if (ra && rb && !isPresenceOnly(rk)) {
           const raType = ra.type === 'integer' ? 'number' : ra.type;
           const rbType = rb.type === 'integer' ? 'number' : rb.type;
           if (raType !== rbType) {

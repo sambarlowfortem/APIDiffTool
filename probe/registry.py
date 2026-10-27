@@ -3,6 +3,7 @@
 import hashlib
 import os
 import re
+import time
 
 import jsonschema
 import yaml
@@ -147,6 +148,10 @@ class ParamResolver:
             except Exception:
                 return None
             self._cache[key] = data
+
+            # Wait for server-side write to propagate before dependent endpoints fire.
+            if method == "POST" and resp.status_code < 300:
+                time.sleep(2)
 
             # Track POST-created resources for end-of-scenario cleanup
             if method == "POST" and resp.status_code < 300:

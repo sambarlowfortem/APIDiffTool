@@ -17,15 +17,25 @@ class HttpClient:
         self._trace_log: list[dict] = []
         self._client = httpx.Client(verify=False, timeout=timeout)
 
+    _HUNTER_NOT_READY_MAX = 5
+
+    def _is_hunter_not_ready(self, resp: httpx.Response) -> bool:
+        try:
+            return resp.json().get("err") == "Hunter not ready to fly."
+        except Exception:
+            return False
+
     def request(self, method: str, url: str, **kwargs) -> httpx.Response:
         """Send a request with auth header, retrying on 429/5xx/connection errors."""
         kwargs.setdefault("headers", {})
         max_retries = 3
+        hunter_retries = 0
         for attempt in range(max_retries + 1):
             kwargs["headers"]["Authorization"] = f"Bearer {self._auth.get_token()}"
             ts = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3] if self._trace else None
             try:
                 resp = self._client.request(method, url, **kwargs)
+                self._client.cookies.clear()
                 if self._trace:
                     self._record(ts, method, url, kwargs, resp, attempt)
                 if resp.status_code == 401 and attempt < max_retries:
@@ -37,6 +47,10 @@ class HttpClient:
                         time.sleep(wait)
                         continue
                 elif resp.status_code >= 500 and attempt < 2:
+                    time.sleep(2)
+                    continue
+                elif self._is_hunter_not_ready(resp) and hunter_retries < self._HUNTER_NOT_READY_MAX:
+                    hunter_retries += 1
                     time.sleep(2)
                     continue
                 if self._delay > 0:

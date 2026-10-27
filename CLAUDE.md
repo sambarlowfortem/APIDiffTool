@@ -133,6 +133,7 @@ To add a new suppression: add an entry to `RESPONSE_FIELD_SUPPRESSIONS`. No prob
 |---|---|---|
 | `/api/v2/sensors/cameras/` | `__v`, `data.__v`, `data[].__v` | Mongoose version key; leaks when cache is warmed by `loadAll()` (no projection) vs `load(id)` (projects `__v: 0`) |
 | `/api/v2/reports/dashboard` | `data[].operators` (prefix — suppresses all child keys) | In-memory operator activity sampled at 15-min intervals; whether any record has a non-empty operators array depends on when probes run relative to those save windows |
+| `/api/v2/dronehunters` | `data[].calibration_progress` | Field only sometimes present; not a real API change |
 
 ## Format detectors
 

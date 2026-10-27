@@ -179,7 +179,8 @@ def main():
             single_registry = _exclude_with_tracks_only(registry)
             param_resolver = ParamResolver(single_registry, http_fn)
             results = run_probe_matrix(
-                client, base_url, single_registry, param_resolver, not_found_sig, scenario, args.verbose
+                client, base_url, single_registry, param_resolver, not_found_sig, scenario, args.verbose,
+                retry_empty_get_max=3, retry_empty_get_delay=2,
             )
             results = run_ablation(
                 client, base_url, single_registry, results, not_found_sig, scenario, args.verbose
@@ -208,7 +209,8 @@ def main():
 
                 print(f"\nProbing matrix for scenario: {scenario}")
                 results = run_probe_matrix(
-                    client, base_url, scenario_registry, param_resolver, not_found_sig, scenario, args.verbose
+                    client, base_url, scenario_registry, param_resolver, not_found_sig, scenario, args.verbose,
+                    retry_empty_get_max=3, retry_empty_get_delay=2,
                 )
                 print(f"\nRunning ablation for scenario: {scenario}")
                 results = run_ablation(
