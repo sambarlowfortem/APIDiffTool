@@ -1,4 +1,4 @@
-registry_version: 15
+registry_version: 16
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
 # Cross-checked against 5.0.9, 5.1.0, 5.2.0 docs (added time-servers write endpoints + radars/relocate)
@@ -69,7 +69,8 @@ endpoints:
 
   - path: /api/v2/system/customer/distance-marker
     methods: [PUT]
-    # distanceMarker write is broken server-side; omit body so probe tests endpoint presence without corrupting state
+    body:
+      PUT: { "distanceMarker": [40.3475, -111.7588] }
 
   - path: /api/v2/system/licensekey
     methods: [PUT]

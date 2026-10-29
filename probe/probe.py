@@ -150,6 +150,10 @@ def main():
     captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     client = HttpClient(auth, delay=args.delay, trace=args.trace)
 
+    # Reset user settings to a known baseline before any probing begins
+    print("\nResetting user settings to baseline...")
+    _reset_user_settings(client, base_url)
+
     # Not-found baseline
     print("\nRecording not-found baseline...")
     not_found_sig = record_not_found_baseline(client, base_url)
@@ -198,6 +202,9 @@ def main():
                         expected_hangar = 1 if scenario == "containers_present" else 0
                         expected_hunters = 1 if scenario == "containers_present" else 0
                         containers.wait_for_settle(expected_hangar, expected_hunters, client, base_url, args.settle_wait)
+                        if scenario == "containers_present":
+                            print("  Sending rules-of-engagement preset to ensure roe object is populated...")
+                            _send_roe_preset(client, base_url)
                 else:
                     print(f"\n--- Scenario: {scenario} (Docker unavailable, skipping container changes) ---")
 
@@ -432,6 +439,256 @@ def _exclude_with_tracks_only(registry: dict) -> dict:
         if not ep.get("with_tracks_only")
     ]
     return filtered
+
+
+def _reset_user_settings(client, base_url: str):
+    """GET all users, extract data[0]._id, then PUT the full known-good user settings body."""
+    url_list = base_url.rstrip("/") + "/api/v2/system/users"
+    try:
+        resp = client.request("GET", url_list)
+        body = resp.json()
+        user_id = None
+        if isinstance(body, dict):
+            data = body.get("data", [])
+            if isinstance(data, list) and data:
+                user_id = data[0].get("_id")
+            elif isinstance(data, dict):
+                user_id = data.get("_id")
+        if not user_id:
+            print("  Warning: could not find user ID from GET /api/v2/system/users — skipping reset")
+            return
+    except Exception as e:
+        print(f"  Warning: GET /api/v2/system/users failed ({e}) — skipping reset")
+        return
+
+    url_update = base_url.rstrip("/") + f"/api/v2/system/users/{user_id}"
+    user_body = {
+        "_id": user_id,
+        "pwdReset": False, "emailReset": False, "active": True,
+        "roles": [1], "smsNumber": None, "smsVerified": False,
+        "eula": True, "eulaVersion": "9.15.22", "permanent": True,
+        "initialized": True, "updateCenter": True,
+        "fname": "tech", "lname": "user", "email": "tech@fortemtech.com",
+        "prefs": {
+            "maps": {
+                "defaultMap": {"lat": 40.35062, "lng": -111.760567, "zoom": 14, "pitch": 1, "bearing": 0},
+                "sensorMap": {"lat": None, "lng": None, "zoom": None, "pitch": None, "bearing": None},
+                "zoneMap": {"lat": None, "lng": None, "zoom": None, "pitch": None, "bearing": None},
+                "groundControlMap": {"lat": 40.34701864328039, "lng": -111.75802552443838, "zoom": 16.97912929340766, "pitch": None, "bearing": 0},
+                "easeToCenter": True,
+            },
+            "waypointMissionDefaults": {
+                "azm": {"enabled": False, "value": None},
+                "height": {"enabled": False, "value": None},
+            },
+            "commandMap": {
+                "center": {"lat": 40.347880687252, "lng": -111.75912355528482, "zoom": 16.768192276697437, "pitch": 0, "bearing": 0},
+                "grid": {"color": "#000", "labels": "mgrs_short", "labelsVisible": True, "opacity": 0.5, "size": 500},
+                "rangeRings": {"center": {"lat": None, "lng": None}, "color": "#fff", "count": 5, "opacity": 0.5, "size": 500},
+                "layerVisibility": {
+                    "adsb": True, "all": False, "cameras": True, "buildings": True,
+                    "defensePoints": True, "distanceMarker": True, "droneHunters": True,
+                    "droneHangars": True, "dropZones": True, "geoCageLabels": True,
+                    "geoCages": True, "landingZones": True, "locationDroppers": True,
+                    "mapGrid": True, "radarLabels": True, "radars": True, "radarTracks": True,
+                    "rangeRings": False, "rfSensors": True, "rfTracks": True,
+                    "trackAglPath": True, "trackData": True, "trackFocus": True,
+                    "trackLabelId": True, "trackLabelSpeed": True, "trackLabelAgl": True,
+                    "trackLabelDistance": True, "trackLabelRcs": True, "trackPaths": False,
+                    "tracks": True, "zoneLabels": True, "zones": True,
+                },
+                "mapStyle": "satellite", "keepMapMoving": True, "useMapSatellite": True,
+                "useMapContourLines": False, "useMapTerrain3D": False, "setupComplete": False,
+            },
+            "commandHud": {
+                "adsb": {"position": {"x": 72, "y": 56, "corner": "bottom-right"}, "enabled": True, "visible": False},
+                "camera1optical": {"position": {"x": 16, "y": 16, "corner": "top-right"}, "enabled": True, "visible": False, "size": 1},
+                "camera1thermal": {"position": {"x": 32, "y": 32, "corner": "top-right"}, "enabled": True, "visible": False, "size": 1},
+                "camera2optical": {"position": {"x": 16, "y": 312, "corner": "top-right"}, "enabled": True, "visible": False, "size": 1},
+                "camera2thermal": {"position": {"x": None, "y": None, "corner": None}, "enabled": True, "visible": False, "size": 1},
+                "demo": {"position": {"x": None, "y": None, "corner": None}, "enabled": True, "visible": False},
+                "filters": {"position": {"x": 322, "y": 274, "corner": "top-left"}, "enabled": True, "visible": False},
+                "hunterCamera": {"position": {"x": 88, "y": 72, "corner": "bottom-right"}, "enabled": True, "visible": False, "size": 1},
+                "liveTracks": {"position": {"x": 282, "y": 16, "corner": "top-left"}, "enabled": True, "visible": True, "size": 1},
+                "map": {"position": {"x": 618, "y": 16, "corner": "top-left"}, "enabled": True, "visible": True},
+                "mitigation": {"position": {"x": 16, "y": 56, "corner": "bottom-left"}, "enabled": True, "visible": True, "showDrawer": True},
+                "mitigationQueue": {"position": {"x": None, "y": None, "corner": None}, "enabled": True, "visible": False},
+                "notifications": {"position": {"x": None, "y": None, "corner": None}, "enabled": True, "visible": True},
+                "rf": {"position": {"x": 16, "y": 274, "corner": "top-left"}, "enabled": True, "visible": False, "showDrawer": False},
+                "telemetry": {"position": {"x": 16, "y": 16, "corner": "top-left"}, "enabled": True, "visible": True},
+            },
+            "language": "en", "timeZone": "UTC", "units": "metric",
+            "unitsDistance": "small", "unitsSpeed": "small",
+            "mapStyle": "street", "mapLegend": True, "useMapSync": False,
+            "useOnlineMaps": False, "useTooltips": True, "audioAlerts": False,
+            "theme": "dark", "size": 4, "showDemoVideo": False,
+        },
+        "units": "metric", "unitsDistance": "small", "unitsSpeed": "small",
+        "mapStyle": "street", "mapLegend": True, "useMapSync": False,
+        "useOnlineMaps": False, "useTooltips": True, "audioAlerts": False,
+        "theme": "dark", "size": 4, "showDemoVideo": False,
+        "waypointMissionDefaults": {
+            "azm": {"enabled": False, "value": None},
+            "height": {"enabled": False, "value": None},
+        },
+        "commandMap": {
+            "center": {"lat": 40.347880687252, "lng": -111.75912355528482, "zoom": 16.768192276697437, "pitch": 0, "bearing": 0},
+            "grid": {"color": "#000", "labels": "mgrs_short", "labelsVisible": True, "opacity": 0.5, "size": 500},
+            "rangeRings": {
+                "color": "#fff", "count": 5,
+                "center": {"lat": None, "lng": None},
+                "opacity": 0.5, "size": 500,
+            },
+            "layerVisibility": {
+                "adsb": True, "all": False, "cameras": True, "buildings": True,
+                "defensePoints": True, "distanceMarker": True, "droneHunters": True,
+                "droneHangars": True, "dropZones": True, "geoCageLabels": True,
+                "geoCages": True, "landingZones": True, "locationDroppers": True,
+                "mapGrid": True, "radarLabels": True, "radars": True, "radarTracks": True,
+                "rangeRings": False, "rfSensors": True, "rfTracks": True,
+                "trackAglPath": True, "trackData": True, "trackFocus": True,
+                "trackLabelId": True, "trackLabelSpeed": True, "trackLabelAgl": True,
+                "trackLabelDistance": True, "trackLabelRcs": True, "trackPaths": False,
+                "tracks": True, "zoneLabels": True, "zones": True,
+            },
+            "mapStyle": "satellite", "keepMapMoving": True, "useMapSatellite": True,
+            "useMapContourLines": False, "useMapTerrain3D": False, "setupComplete": False,
+        },
+        "commandHud": {
+            "adsb": {"enabled": True, "position": {"x": 72, "y": 56, "corner": "bottom-right"}, "visible": False},
+            "camera1optical": {"enabled": True, "position": {"x": 16, "y": 16, "corner": "top-right"}, "visible": False, "size": 1},
+            "camera1thermal": {"enabled": True, "position": {"x": 32, "y": 32, "corner": "top-right"}, "visible": False, "size": 1},
+            "camera2optical": {"enabled": True, "position": {"x": 16, "y": 312, "corner": "top-right"}, "visible": False, "size": 1},
+            "camera2thermal": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": False, "size": 1},
+            "demo": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": False},
+            "filters": {"enabled": True, "position": {"x": 322, "y": 274, "corner": "top-left"}, "visible": False},
+            "hunterCamera": {"enabled": True, "position": {"x": 88, "y": 72, "corner": "bottom-right"}, "visible": False, "size": 1},
+            "liveTracks": {"enabled": True, "position": {"x": 282, "y": 16, "corner": "top-left"}, "visible": True, "size": 1},
+            "map": {"enabled": True, "position": {"x": 618, "y": 16, "corner": "top-left"}, "visible": True},
+            "mitigation": {"enabled": True, "position": {"x": 16, "y": 56, "corner": "bottom-left"}, "visible": True, "showDrawer": True},
+            "mitigationQueue": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": False},
+            "notifications": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": True},
+            "rf": {"enabled": True, "position": {"x": 16, "y": 274, "corner": "top-left"}, "visible": False, "showDrawer": False},
+            "telemetry": {"enabled": True, "position": {"x": 16, "y": 16, "corner": "top-left"}, "visible": True},
+        },
+    }
+    try:
+        resp = client.request("PUT", url_update, json=user_body)
+        if resp.status_code < 300:
+            print(f"  User settings reset OK (id={user_id})")
+        else:
+            print(f"  Warning: user settings reset returned {resp.status_code}")
+    except Exception as e:
+        print(f"  Warning: PUT {url_update} failed ({e})")
+
+    # Also POST preferences to ensure groundControlMap and other prefs are fully populated
+    url_prefs = base_url.rstrip("/") + "/api/v2/system/users/preferences"
+    prefs_body = {
+        "language": "en",
+        "timeZone": "UTC",
+        "maps": {
+            "defaultMap": {"lat": 40.35062, "lng": -111.760567, "zoom": 14, "pitch": 1, "bearing": 0},
+            "sensorMap": {"lat": None, "lng": None, "zoom": None, "pitch": None, "bearing": None},
+            "zoneMap": {"lat": None, "lng": None, "zoom": None, "pitch": None, "bearing": None},
+            "groundControlMap": {"lat": 40.34701864328039, "lng": -111.75802552443838, "zoom": 16.97912929340766, "pitch": None, "bearing": 0},
+            "easeToCenter": True,
+        },
+        "units": "metric",
+        "unitsDistance": "small",
+        "unitsSpeed": "small",
+        "mapStyle": "street",
+        "mapLegend": True,
+        "useMapSync": False,
+        "useOnlineMaps": False,
+        "useTooltips": True,
+        "audioAlerts": False,
+        "theme": "dark",
+        "size": 4,
+        "showDemoVideo": False,
+        "waypointMissionDefaults": {
+            "azm": {"enabled": False, "value": None},
+            "height": {"enabled": False, "value": None},
+        },
+        "commandMap": {
+            "center": {"lat": 40.347880687252, "lng": -111.75912355528482, "zoom": 16.768192276697437, "pitch": 0, "bearing": 0},
+            "grid": {"color": "#000", "labels": "mgrs_short", "labelsVisible": True, "opacity": 0.5, "size": 500},
+            "rangeRings": {"color": "#fff", "count": 5, "center": {"lat": None, "lng": None}, "opacity": 0.5, "size": 500},
+            "layerVisibility": {
+                "adsb": True, "all": False, "cameras": True, "buildings": True,
+                "defensePoints": True, "distanceMarker": True, "droneHunters": True,
+                "droneHangars": True, "dropZones": True, "geoCageLabels": True,
+                "geoCages": True, "landingZones": True, "locationDroppers": True,
+                "mapGrid": True, "radarLabels": True, "radars": True, "radarTracks": True,
+                "rangeRings": False, "rfSensors": True, "rfTracks": True,
+                "trackAglPath": True, "trackData": True, "trackFocus": True,
+                "trackLabelId": True, "trackLabelSpeed": True, "trackLabelAgl": True,
+                "trackLabelDistance": True, "trackLabelRcs": True, "trackPaths": False,
+                "tracks": True, "zoneLabels": True, "zones": True,
+            },
+            "mapStyle": "satellite", "keepMapMoving": True, "useMapSatellite": True,
+            "useMapContourLines": False, "useMapTerrain3D": False, "setupComplete": False,
+        },
+        "commandHud": {
+            "adsb": {"enabled": True, "position": {"x": 72, "y": 56, "corner": "bottom-right"}, "visible": False},
+            "camera1optical": {"enabled": True, "position": {"x": 16, "y": 16, "corner": "top-right"}, "visible": False, "size": 1},
+            "camera1thermal": {"enabled": True, "position": {"x": 32, "y": 32, "corner": "top-right"}, "visible": False, "size": 1},
+            "camera2optical": {"enabled": True, "position": {"x": 16, "y": 312, "corner": "top-right"}, "visible": False, "size": 1},
+            "camera2thermal": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": False, "size": 1},
+            "demo": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": False},
+            "filters": {"enabled": True, "position": {"x": 322, "y": 274, "corner": "top-left"}, "visible": False},
+            "hunterCamera": {"enabled": True, "position": {"x": 88, "y": 72, "corner": "bottom-right"}, "visible": False, "size": 1},
+            "liveTracks": {"enabled": True, "position": {"x": 282, "y": 16, "corner": "top-left"}, "visible": True, "size": 1},
+            "map": {"enabled": True, "position": {"x": 618, "y": 16, "corner": "top-left"}, "visible": True},
+            "mitigation": {"enabled": True, "position": {"x": 16, "y": 56, "corner": "bottom-left"}, "visible": True, "showDrawer": True},
+            "mitigationQueue": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": False},
+            "notifications": {"enabled": True, "position": {"x": None, "y": None, "corner": None}, "visible": True},
+            "rf": {"enabled": True, "position": {"x": 16, "y": 274, "corner": "top-left"}, "visible": False, "showDrawer": False},
+            "telemetry": {"enabled": True, "position": {"x": 16, "y": 16, "corner": "top-left"}, "visible": True},
+        },
+    }
+    try:
+        resp = client.request("POST", url_prefs, json=prefs_body)
+        if resp.status_code < 300:
+            print(f"  User preferences POST OK")
+        else:
+            print(f"  Warning: user preferences POST returned {resp.status_code}")
+    except Exception as e:
+        print(f"  Warning: POST {url_prefs} failed ({e})")
+
+
+def _send_roe_preset(client, base_url: str):
+    """GET dronehunters, find first hunter_id, POST rules-of-engagement to ensure roe is populated."""
+    url_list = base_url.rstrip("/") + "/api/v2/dronehunters"
+    try:
+        resp = client.request("GET", url_list)
+        body = resp.json()
+        hunter_id = None
+        if isinstance(body, dict):
+            data = body.get("data", [])
+            if isinstance(data, list) and data:
+                hunter_id = data[0].get("hunter_id")
+        if not hunter_id:
+            print("  Warning: could not find hunter_id from GET /api/v2/dronehunters — skipping RoE preset")
+            return
+    except Exception as e:
+        print(f"  Warning: GET /api/v2/dronehunters failed ({e}) — skipping RoE preset")
+        return
+
+    url_roe = base_url.rstrip("/") + f"/api/v2/dronehunters/{hunter_id}/set-rules-of-engagement"
+    roe_body = {
+        "acquire_targets": False,
+        "default_mission": "DEFEND",
+        "weapons_enabled": False,
+        "override_global": False,
+    }
+    try:
+        resp = client.request("POST", url_roe, json=roe_body)
+        if resp.status_code < 300:
+            print(f"  Rules-of-engagement preset sent OK (hunter_id={hunter_id})")
+        else:
+            print(f"  Warning: RoE preset returned {resp.status_code} (hunter_id={hunter_id})")
+    except Exception as e:
+        print(f"  Warning: POST {url_roe} failed ({e})")
 
 
 if __name__ == "__main__":

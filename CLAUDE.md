@@ -135,6 +135,7 @@ To add a new suppression: add an entry to `RESPONSE_FIELD_SUPPRESSIONS`. No prob
 | `/api/v2/reports/dashboard` | `data[].operators` (prefix — suppresses all child keys) | In-memory operator activity sampled at 15-min intervals; whether any record has a non-empty operators array depends on when probes run relative to those save windows |
 | `/api/v2/dronehunters` | `data[].calibration_progress` | Field only sometimes present; not a real API change |
 
+
 ## Format detectors
 
 `probe/formats.py` implements 40 named formats (see `SCHEMA.md` section 4 for the full vocabulary). Run `python3 probe/test_formats.py` to verify all 55 assertions pass. Bump `FORMAT_DETECTORS_VERSION` in `formats.py` whenever detectors change — this is recorded in every snapshot so the diff viewer can flag format changes that may be detector-version artifacts rather than API changes.
