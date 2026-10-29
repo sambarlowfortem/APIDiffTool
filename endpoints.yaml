@@ -1,4 +1,4 @@
-registry_version: 14
+registry_version: 15
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
 # Cross-checked against 5.0.9, 5.1.0, 5.2.0 docs (added time-servers write endpoints + radars/relocate)
@@ -895,8 +895,13 @@ endpoints:
 
   - path: /api/v2/dronehunters/groundcontrol/radio
     methods: [POST]
+    skip_methods: [POST]
+    # POST skipped: firmware rejects it with "No valid radios available to set frequency."
+    # The Microhard pDDL1800-AES256 reports can_set_frequency=false; frequency control is
+    # not supported via this interface for this radio model. The client-side guard (canSetFreq)
+    # prevents the Angular UI from ever calling this endpoint. No server-side guard exists.
     body:
-      POST: { "address": "probe-address", "config": "probe-config", "value": "probe-value" }
+      POST: { "address": "172.16.10.10", "config": "frequency", "value": "1820" }
 
   - path: /api/v2/dronehunters/groundcontrol/set-registered-radio
     methods: [POST]
@@ -904,34 +909,19 @@ endpoints:
     # that permanently corrupts the registered-radio state, requiring a full system reset
     # to recover. Always send exactly these real Microhard values.
     body:
-      POST: { "model": "Microhard", "address": "172.16.10.10" }
+      POST: { "model": "microhard", "address": "172.16.10.10" }
 
   - path: /api/v2/dronehunters/groundcontrol/radio-frequency-settings
-    methods: [GET, POST]
-    body:
-      POST:
-        address: "172.16.10.10"
-        bandwidth_bytes_in: -1
-        bandwidth_bytes_out: -1
-        baud_rate: 0
-        can_frequency_hop: false
-        can_set_frequency: false
-        can_toggle_pairing: true
-        can_toggle_transmit: true
-        frequency: 1820
-        frequency_hop_threshold_db: null
-        frequency_ranges: []
-        hop_frequencies: []
-        id: "172.16.10.10"
-        is_frequency_hop_enabled: false
-        is_network_id_number: false
-        make: "Microhard"
-        model: "pDDL1800-AES256"
-        network_id: "FTxDH"
-        network_id_range: null
-        serial_port_path: null
-        transmitting: true
-        type: "UDP"
+    methods: [GET]
+    # POST skipped: firmware rejects it with "Cannot set frequency for unsupported radio."
+    # The Microhard pDDL1800-AES256 reports can_set_frequency=false, meaning frequency
+    # control is not supported for this radio model. The API spec incorrectly documents
+    # only a top-level "settings" object as required; the actual route requires five
+    # individual fields (radio_id, frequency, is_frequency_hop_enabled,
+    # frequency_hop_threshold_db, hop_frequencies). radio_id is the radio's IP address
+    # as returned by the GET. The Angular client never calls this endpoint when
+    # can_set_frequency=false. No server-side guard exists — the firmware rejects it.
+    skip_methods: [POST]
 
   - path: /api/v2/dronehunters/get-global-rules-of-engagement
     methods: [GET]
