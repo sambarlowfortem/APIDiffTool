@@ -1,0 +1,4 @@
+{
+  "5.2.3": "tools.fortemtech.com/docker/dronehunter-sim:8.1.3-5-humble-amd64",
+  "5.0.7": "tools.fortemtech.com/docker/dronehunter-sim:7.0.8-3"
+}

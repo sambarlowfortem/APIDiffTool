@@ -55,6 +55,8 @@ def parse_args():
                         "no_containers, containers_present, multiple_hunters. "
                         "Use 'with_tracks' to run (or exclusively run) the track-seeded pass. "
                         "Example: --scenarios with_tracks  (default: no_containers,containers_present)")
+    p.add_argument("--container-images", default="container_images.json",
+                   help="Path to version→image registry JSON (default: container_images.json)")
     p.add_argument("--skip-containers", action="store_true",
                    help="Skip container management (run a single probe in current state)")
     p.add_argument("--delay", type=float, default=0.0,
@@ -176,7 +178,7 @@ def main():
     print("Dashboard data OK")
 
     # Container management
-    containers = ContainerManager()
+    containers = ContainerManager(api_version=args.version, images_config_path=args.container_images)
     if not args.skip_containers and containers.client:
         containers.save_initial_state()
 
