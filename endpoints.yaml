@@ -1,4 +1,4 @@
-registry_version: 16
+registry_version: 19
 
 # Hand-checked against SkyDome_Smart_API_5.2.3.html
 # Cross-checked against 5.0.9, 5.1.0, 5.2.0 docs (added time-servers write endpoints + radars/relocate)
@@ -88,7 +88,7 @@ endpoints:
   - path: /api/v2/reports/dashboard/{id}
     methods: [DELETE]
     params:
-      id: { from: "GET /api/v2/reports/dashboard", field: "_id" }
+      id: { value: "000000000000000000000000" }
 
   # ─── Dropped Locations ───────────────────────────────────────────────────────
 
@@ -121,22 +121,41 @@ endpoints:
 
   - path: /api/v2/system/notifications
     methods: [GET, POST]
+    no_auto_cleanup: true
     body:
       POST:
-        type: 3
-        level: 4
-        source: "probe"
+        type: 2
+        level: 2
         hud: []
-        title: "probe-notification"
-        detail: "Created by API prober"
+        source: "probe"
+        title: "Unsupported Radar Version"
+        detail: "TrueView Radar undefined is running an unsupported software version. Radar version: 4.3.0 Supported version: 4.6.1"
         flagged: false
+        user: "0"
+        ack: false
         ackAllowed: true
+        key: "probe_radar_version"
+        dismissed: false
+        created: "2026-01-01T00:00:00.000Z"
+        __v: 0
+    response_field_overrides:
+      "data[].title": {type: "string"}
+      "data[].user": {type: "string"}
 
   - path: /api/v2/system/notifications/latest
     methods: [GET]
+    response_field_overrides:
+      "data.title": {type: "string"}
+      "data.user": {type: "string"}
 
   - path: /api/v2/system/notifications/audit
     methods: [GET]
+    query_params:
+      GET:
+        flagged: "false"
+    response_field_overrides:
+      "data[].title": {type: "string"}
+      "data[].user": {type: "string"}
 
   - path: /api/v2/system/notifications/{id}
     methods: [GET, PUT, DELETE]
@@ -144,14 +163,21 @@ endpoints:
       id: { from: "POST /api/v2/system/notifications", field: "_id" }
     body:
       PUT:
-        type: 3
-        level: 4
-        source: "probe"
+        type: 2
+        level: 2
         hud: []
+        source: "probe"
         title: "probe-notification-updated"
         detail: "Updated by API prober"
         flagged: false
+        user: "0"
+        ack: false
         ackAllowed: true
+        key: "probe_radar_version"
+        dismissed: false
+    response_field_overrides:
+      "data.title": {type: "string"}
+      "data.user": {type: "string"}
 
   - path: /api/v2/system/notifications/acknowledge/{id}
     methods: [PUT]
@@ -1075,6 +1101,10 @@ endpoints:
     methods: [GET, POST]
     with_tracks_only: true
     probe_order: [POST, GET, PUT, DELETE]
+    post_schema_excludes: [fov]
+    get_retry_while:
+      - field: "data[].fov.type"
+        value: "FeatureCollection"
     body:
       POST:
         name: 1

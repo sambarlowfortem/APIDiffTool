@@ -14,14 +14,19 @@ def _is_dynamic_id_key(k: str) -> bool:
     return k.isalnum() and any(c.isdigit() for c in k) and any(c.isalpha() for c in k)
 
 
-def infer_schema_from_body(body, prefix: str = "") -> dict:
-    """Flatten a JSON body into a dot-notation field→{type,format} dict."""
+def infer_schema_from_body(body, prefix: str = "", exhaust_arrays: bool = False) -> dict:
+    """Flatten a JSON body into a dot-notation field→{type,format} dict.
+
+    exhaust_arrays: when True, union fields across all array items instead of
+    only sampling the first. Use for endpoints whose array items have optional
+    fields that may be absent from the first element (e.g. notifications).
+    """
     result = {}
-    _flatten(body, prefix, result)
+    _flatten(body, prefix, result, exhaust_arrays)
     return result
 
 
-def _flatten(value, prefix: str, result: dict):
+def _flatten(value, prefix: str, result: dict, exhaust_arrays: bool = False):
     if isinstance(value, dict):
         # When all keys look like dynamic record IDs (e.g. track IDs), normalise them
         # to a single <trackID> placeholder so the schema is stable across runs.
@@ -29,30 +34,34 @@ def _flatten(value, prefix: str, result: dict):
             key = f"{prefix}.{_TRACK_ID_PLACEHOLDER}" if prefix else _TRACK_ID_PLACEHOLDER
             first_val = next(iter(value.values()))
             result[key] = {"type": "object"}
-            _flatten(first_val, key, result)
+            _flatten(first_val, key, result, exhaust_arrays)
             return
         for k, v in value.items():
             key = f"{prefix}.{k}" if prefix else k
             if isinstance(v, dict):
                 result[key] = {"type": "object"}
-                _flatten(v, key, result)
+                _flatten(v, key, result, exhaust_arrays)
             elif isinstance(v, list):
                 result[key] = {"type": "array"}
                 if v:
-                    item = v[0]
                     arr_key = f"{key}[]"
-                    if isinstance(item, dict):
+                    items_to_scan = v if exhaust_arrays else v[:1]
+                    first = items_to_scan[0]
+                    if isinstance(first, dict):
                         result[arr_key] = {"type": "object"}
-                        _flatten(item, arr_key, result)
+                        for item in items_to_scan:
+                            if isinstance(item, dict):
+                                _flatten(item, arr_key, result, exhaust_arrays)
                     else:
-                        fmt = detect(item)
-                        result[arr_key] = {"type": _type_of(item), "format": fmt}
+                        fmt = detect(first)
+                        result[arr_key] = {"type": _type_of(first), "format": fmt}
             else:
                 fmt = detect(v)
                 result[key] = {"type": _type_of(v), "format": fmt}
     elif isinstance(value, list):
-        for i, item in enumerate(value[:1]):
-            _flatten(item, prefix, result)
+        items_to_scan = value if exhaust_arrays else value[:1]
+        for item in items_to_scan:
+            _flatten(item, prefix, result, exhaust_arrays)
 
 
 def _type_of(v) -> str:

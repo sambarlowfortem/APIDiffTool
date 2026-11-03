@@ -64,6 +64,10 @@ def probe_endpoint(
     kwargs = {}
     if body is not None:
         kwargs["json"] = body
+    if method == "GET":
+        qp = (endpoint.get("query_params") or {}).get(method)
+        if qp:
+            kwargs["params"] = qp
 
     # Send baseline
     try:
@@ -95,12 +99,41 @@ def probe_endpoint(
     response_schema = None
     if exists and resp.status_code < 300:
         try:
-            schema = infer_schema_from_body(raw_body)
+            exhaust = "/system/notifications" in path_template
+            schema = infer_schema_from_body(raw_body, exhaust_arrays=exhaust)
             if schema:
                 # Mark all fields as required initially (single sample)
                 for info in schema.values():
                     info["required"] = True
+                # Apply per-endpoint field overrides (forces type; strips format unless specified)
+                overrides = endpoint.get("response_field_overrides") or {}
+                for field_key, override_info in overrides.items():
+                    if field_key in schema:
+                        entry = dict(schema[field_key])
+                        if "type" in override_info:
+                            entry["type"] = override_info["type"]
+                        # Remove format unless the override explicitly provides one
+                        if "format" in override_info:
+                            fmt = override_info["format"]
+                            if fmt is None:
+                                entry.pop("format", None)
+                            else:
+                                entry["format"] = fmt
+                        else:
+                            entry.pop("format", None)
+                        schema[field_key] = entry
                 response_schema = schema
+
+                if method == "POST":
+                    excludes = endpoint.get("post_schema_excludes") or []
+                    if excludes:
+                        response_schema = {
+                            k: v for k, v in response_schema.items()
+                            if not any(
+                                k == exc or k.startswith(exc + ".") or k.startswith(exc + "[")
+                                for exc in excludes
+                            )
+                        }
         except Exception:
             pass
 
@@ -168,6 +201,8 @@ def _extract_id_from_response(body, extra_id_field: str | None = None) -> str | 
 
 def _cleanup_matrix_post(client, base_url: str, ep: dict, ep_results: list[dict]):
     """Best-effort DELETE of the resource created by the matrix POST probe."""
+    if ep.get("no_auto_cleanup"):
+        return
     post_entry = next(
         (e for e in ep_results if e.get("method") == "POST" and e.get("_raw_resp")),
         None,
@@ -230,6 +265,36 @@ def _sanitize_dronehunter_health(body) -> dict:
             item = {**item, "health": {}}
         sanitized.append(item)
     return {**body, "data": sanitized}
+
+
+def _field_path_matches(obj, parts: list[str], expected_value) -> bool:
+    """Navigate a dot-split path ([] suffix fans out over arrays) and return True if any leaf == expected_value."""
+    if not parts:
+        return obj == expected_value
+    part = parts[0]
+    rest = parts[1:]
+    if part.endswith("[]"):
+        key = part[:-2]
+        arr = obj.get(key) if isinstance(obj, dict) else None
+        if isinstance(arr, list):
+            return any(_field_path_matches(item, rest, expected_value) for item in arr)
+        return False
+    if isinstance(obj, dict) and part in obj:
+        return _field_path_matches(obj[part], rest, expected_value)
+    return False
+
+
+def _check_get_retry_while(entry: dict, conditions: list[dict]) -> bool:
+    """Return True if any get_retry_while condition is satisfied in the entry's response body."""
+    raw = entry.get("_raw_resp", {})
+    body = raw.get("body")
+    if not isinstance(body, dict):
+        return False
+    for cond in conditions:
+        parts = cond.get("field", "").split(".")
+        if _field_path_matches(body, parts, cond.get("value")):
+            return True
+    return False
 
 
 def _is_empty_response(entry: dict) -> bool:
@@ -332,29 +397,36 @@ def run_probe_matrix(
             if method == "POST" and entry.get("_raw_resp", {}).get("status", 0) in range(200, 300):
                 post_succeeded_for_ep = True
 
-            if (
-                retry_empty_get_max > 0
-                and method == "GET"
-                and _should_retry_get(entry, post_succeeded=post_succeeded_for_ep)
-            ):
-                for attempt in range(1, retry_empty_get_max + 1):
-                    raw_status = entry.get("_raw_resp", {}).get("status", 0)
-                    reason = "429 rate-limited" if raw_status == 429 else "empty response"
-                    # /api/v2/tracks is rate-limited at 1Hz by the server. Sleep a random
-                    # duration between 1-2s to avoid phase-locking with the data window.
-                    if path_template == "/api/v2/tracks":
-                        time.sleep(random.uniform(1.0, 2.0))
-                    elif retry_empty_get_delay > 0:
-                        time.sleep(retry_empty_get_delay)
-                    if verbose:
-                        print(f"    [{scenario}] GET {path_template} — {reason}, retrying (attempt {attempt}/{retry_empty_get_max})")
-                    entry = probe_endpoint(
-                        client, base_url, ep, method, resolved, not_found_sig, scenario
-                    )
-                    if not _should_retry_get(entry, post_succeeded=post_succeeded_for_ep):
+            if retry_empty_get_max > 0 and method == "GET":
+                get_retry_while_conds = ep.get("get_retry_while") or []
+                is_std = _should_retry_get(entry, post_succeeded=post_succeeded_for_ep)
+                is_incomplete = bool(get_retry_while_conds) and _check_get_retry_while(entry, get_retry_while_conds)
+
+                if is_std or is_incomplete:
+                    for attempt in range(1, retry_empty_get_max + 1):
+                        raw_status = entry.get("_raw_resp", {}).get("status", 0)
+                        if is_incomplete:
+                            reason = "incomplete field"
+                            time.sleep(2)
+                        elif path_template == "/api/v2/tracks":
+                            # /api/v2/tracks is rate-limited at 1Hz; avoid phase-locking with the data window.
+                            reason = "429 rate-limited" if raw_status == 429 else "empty response"
+                            time.sleep(random.uniform(1.0, 2.0))
+                        else:
+                            reason = "empty response"
+                            if retry_empty_get_delay > 0:
+                                time.sleep(retry_empty_get_delay)
                         if verbose:
-                            print(f"    [{scenario}] GET {path_template} — got data on attempt {attempt}")
-                        break
+                            print(f"    [{scenario}] GET {path_template} — {reason}, retrying (attempt {attempt}/{retry_empty_get_max})")
+                        entry = probe_endpoint(
+                            client, base_url, ep, method, resolved, not_found_sig, scenario
+                        )
+                        is_std = _should_retry_get(entry, post_succeeded=post_succeeded_for_ep)
+                        is_incomplete = bool(get_retry_while_conds) and _check_get_retry_while(entry, get_retry_while_conds)
+                        if not is_std and not is_incomplete:
+                            if verbose:
+                                print(f"    [{scenario}] GET {path_template} — got data on attempt {attempt}")
+                            break
 
             ep_results.append(entry)
 

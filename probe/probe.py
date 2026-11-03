@@ -159,6 +159,22 @@ def main():
     not_found_sig = record_not_found_baseline(client, base_url)
     print(f"Not-found signature: status={_sig_status(not_found_sig)}")
 
+    # Dashboard pre-flight: data is schedule-populated and cannot be created manually.
+    # Abort early rather than recording an incomplete snapshot with empty dashboard schemas.
+    print("\nChecking dashboard data availability...")
+    if not _check_dashboard_has_data(client, base_url):
+        auth.stop_auto_refresh()
+        client.close()
+        print(f"\n{'='*80}")
+        print("ABORT: /api/v2/reports/dashboard returned no data.")
+        print()
+        print("Dashboard reports are populated on a schedule and cannot be created")
+        print("manually. Wait until the dashboard has at least one data set, then")
+        print("re-run the probe.")
+        print(f"{'='*80}")
+        sys.exit(1)
+    print("Dashboard data OK")
+
     # Container management
     containers = ContainerManager()
     if not args.skip_containers and containers.client:
@@ -439,6 +455,26 @@ def _exclude_with_tracks_only(registry: dict) -> dict:
         if not ep.get("with_tracks_only")
     ]
     return filtered
+
+
+def _check_dashboard_has_data(client, base_url: str) -> bool:
+    """Return True if /api/v2/reports/dashboard has at least one data record."""
+    url = base_url.rstrip("/") + "/api/v2/reports/dashboard"
+    try:
+        resp = client.request("GET", url)
+        if resp.status_code >= 300:
+            return False
+        body = resp.json()
+        if not isinstance(body, dict):
+            return False
+        data = body.get("data")
+        if isinstance(data, list):
+            return len(data) > 0
+        if isinstance(data, dict):
+            return len(data) > 0
+        return False
+    except Exception:
+        return False
 
 
 def _reset_user_settings(client, base_url: str):

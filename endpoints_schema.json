@@ -177,6 +177,61 @@
         "cleanup_id_field": {
           "type": "string",
           "description": "Response field to use as the resource ID when constructing the cleanup DELETE URL. Defaults to _id/id/featureId. Use when the resource's identifier is in a differently named field (e.g. 'name' for defend-points and land-zones)."
+        },
+        "no_auto_cleanup": {
+          "type": "boolean",
+          "description": "If true, skip the best-effort auto-DELETE of the resource created by the matrix POST. Use when a later endpoint (e.g. /{id}) needs to interact with the resource and will clean it up via its own DELETE."
+        },
+        "query_params": {
+          "type": "object",
+          "description": "Query parameters to append to requests, keyed by HTTP method (e.g. GET).",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        },
+        "post_schema_excludes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" },
+          "description": "Dot-path prefixes to strip from the schema recorded for POST responses. Use for fields computed asynchronously that are always empty/incomplete on the initial POST (e.g. fov on cameras)."
+        },
+        "get_retry_while": {
+          "type": "array",
+          "description": "Retry GET responses up to retry_empty_get_max times (2 s between attempts) while any of these field conditions hold. Use for async-computed fields that may still be in an intermediate state immediately after resource creation.",
+          "items": {
+            "type": "object",
+            "required": ["field", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "Dot-path to the field to inspect. Append [] to a segment to fan out over array elements (e.g. data[].fov.type)."
+              },
+              "value": {
+                "type": "string",
+                "description": "Trigger a retry while any matching leaf equals this value."
+              }
+            }
+          }
+        },
+        "response_field_overrides": {
+          "type": "object",
+          "description": "Per-field schema overrides applied after inference, keyed by dot-notation field path. Forces type and strips format unless format is explicitly provided.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["string", "number", "boolean", "object", "array", "null"]
+              },
+              "format": {
+                "type": "string",
+                "description": "Explicit format to set. Omit to strip format entirely."
+              }
+            }
+          }
         }
       }
     }

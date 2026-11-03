@@ -115,7 +115,9 @@ The prober will send GET/HEAD/OPTIONS to these (which return 405) but skip all w
 
 Some response fields appear inconsistently across probes for reasons unrelated to the API changing (e.g. Mongoose internal fields leaking through one cache path but not another). These are suppressed in the diff viewer so they don't show up as breaking changes.
 
-Suppressions live in `viewer/index.html` in the `RESPONSE_FIELD_SUPPRESSIONS` constant near the top of the response-schema diff loop (~line 666):
+Two suppression mechanisms live in `viewer/index.html` near the top of the response-schema diff loop (~line 666):
+
+**`RESPONSE_FIELD_SUPPRESSIONS`** — excludes a field entirely (presence, type, and format are all ignored):
 
 ```js
 const RESPONSE_FIELD_SUPPRESSIONS = {
@@ -123,17 +125,31 @@ const RESPONSE_FIELD_SUPPRESSIONS = {
 };
 ```
 
-The key is a **path substring** — any endpoint whose path contains that string has the listed field keys excluded from the diff. Field keys use dot-notation as flattened by the prober (e.g. `data[].__v` for a field inside a response array).
+**`RESPONSE_FORMAT_SUPPRESSIONS`** — the field is still compared for presence and type, but format differences are silently ignored. Use for fields whose value spans multiple formats across the notification log (e.g. `user` can be `"0"`, a user ID, or an email address in the same response):
 
-To add a new suppression: add an entry to `RESPONSE_FIELD_SUPPRESSIONS`. No prober rerun needed — just reload the viewer.
+```js
+const RESPONSE_FORMAT_SUPPRESSIONS = {
+  '/api/v2/system/notifications': ['data[].user', 'data.user'],
+};
+```
 
-**Current suppressions:**
+In both cases the key is a **path substring** — any endpoint whose path contains that string has the listed field keys affected. Field keys use dot-notation as flattened by the prober (e.g. `data[].__v` for a field inside a response array).
+
+To add a new suppression: add an entry to the appropriate constant. No prober rerun needed — just reload the viewer.
+
+**Current field suppressions (`RESPONSE_FIELD_SUPPRESSIONS`):**
 
 | Path pattern | Suppressed fields | Reason |
 |---|---|---|
 | `/api/v2/sensors/cameras/` | `__v`, `data.__v`, `data[].__v` | Mongoose version key; leaks when cache is warmed by `loadAll()` (no projection) vs `load(id)` (projects `__v: 0`) |
 | `/api/v2/reports/dashboard` | `data[].operators` (prefix — suppresses all child keys) | In-memory operator activity sampled at 15-min intervals; whether any record has a non-empty operators array depends on when probes run relative to those save windows |
 | `/api/v2/dronehunters` | `data[].calibration_progress` | Field only sometimes present; not a real API change |
+
+**Current format suppressions (`RESPONSE_FORMAT_SUPPRESSIONS`):**
+
+| Path pattern | Suppressed fields | Reason |
+|---|---|---|
+| `/api/v2/system/notifications` | `data[].user`, `data.user` | `user` holds a user ID, the literal `"0"`, or an email address depending on which notification is last in the array — format varies run-to-run, type (string) is what matters |
 
 
 ## Format detectors

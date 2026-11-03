@@ -670,6 +670,11 @@ function runDiff() {
         '/api/v2/reports/dashboard': ['data[].operators'],
         '/api/v2/dronehunters': ['data[].calibration_progress'],
       };
+      // Fields where format differences are suppressed — type is validated but format is not.
+      // Use for fields whose value varies across notifications/events (e.g. user IDs, emails, "0").
+      const RESPONSE_FORMAT_SUPPRESSIONS = {
+        '/api/v2/system/notifications': ['data[].user', 'data.user'],
+      };
       // Fields checked for presence (added/removed) only — type/format differences are ignored.
       const PRESENCE_ONLY_FIELDS = {
         '/api/v2/dronehunters': ['data[].radar_time_slot'],
@@ -678,6 +683,10 @@ function runDiff() {
         .filter(([pattern]) => (epA.path || '').includes(pattern))
         .flatMap(([, fields]) => fields);
       const isSuppressed = k => suppressedPrefixes.some(p => k === p || k.startsWith(p + '[') || k.startsWith(p + '.'));
+      const formatSuppressedPrefixes = Object.entries(RESPONSE_FORMAT_SUPPRESSIONS)
+        .filter(([pattern]) => (epA.path || '').includes(pattern))
+        .flatMap(([, fields]) => fields);
+      const isFormatSuppressed = k => formatSuppressedPrefixes.some(p => k === p || k.startsWith(p + '[') || k.startsWith(p + '.'));
       const presenceOnlyPrefixes = Object.entries(PRESENCE_ONLY_FIELDS)
         .filter(([pattern]) => (epA.path || '').includes(pattern))
         .flatMap(([, fields]) => fields);
@@ -699,7 +708,7 @@ function runDiff() {
           if (raType !== rbType) {
             changes.push({ category: 'type_change', label: `Response field type: ${rk}`, valA: `${raType || '—'}`, valB: `${rbType || '—'}`, breaking: true });
             isBreaking = true;
-          } else if (ra.format !== rb.format) {
+          } else if (ra.format !== rb.format && !isFormatSuppressed(rk)) {
             const numericFormats = new Set(['integer', 'decimal']);
             const bothShape = (ra.format || '').startsWith('shape:') && (rb.format || '').startsWith('shape:');
             if (!bothShape && !(numericFormats.has(ra.format) && numericFormats.has(rb.format))) {
